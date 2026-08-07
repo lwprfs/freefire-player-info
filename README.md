@@ -1,4 +1,3 @@
-```markdown
 # Free Fire Player Info Checker
 
 A powerful Python-based CLI tool to fetch and display detailed Free Fire player information using the GamesKinbo API. Features colorful terminal output, asset integration, player history tracking, and player comparison functionality.
@@ -236,6 +235,7 @@ CS Rank (Star-based)
 Credits
 
 · API: GamesKinbo - https://api.gameskinbo.com
+
 · Item Data: ItemID2 - https://github.com/0xMe/ItemID2
 
 License
@@ -245,5 +245,3 @@ This project is for educational purposes. Please respect the API terms of servic
 Disclaimer
 
 This tool is not affiliated with Garena or Free Fire. All data is fetched through the GamesKinbo API. Use responsibly and respect the API usage limits (100 free requests/month).
-
-```

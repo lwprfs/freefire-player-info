@@ -11,6 +11,13 @@ ASSETS_DIR = "assets"
 CDN_FILE = f"{ASSETS_DIR}/cdn.json"
 ITEM_DATA_FILE = f"{ASSETS_DIR}/itemData.json"
 
+# Cache for loaded data
+_cached_data = {
+    'rank_data': None,
+    'cdn_data': None,
+    'item_data': None
+}
+
 def load_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, 'r') as f:
@@ -31,26 +38,45 @@ def save_players_db(db):
     with open(PLAYERS_DB, 'w') as f:
         json.dump(db, f, indent=2)
 
-def load_rank_data():
-    if os.path.exists(RANK_DATA_FILE):
-        with open(RANK_DATA_FILE, 'r') as f:
-            return json.load(f)
-    return {"br": {}, "cs": {}}
+def load_rank_data(force_reload=False):
+    """Load rank data with caching"""
+    if _cached_data['rank_data'] is None or force_reload:
+        if os.path.exists(RANK_DATA_FILE):
+            with open(RANK_DATA_FILE, 'r') as f:
+                _cached_data['rank_data'] = json.load(f)
+        else:
+            _cached_data['rank_data'] = {"br": {}, "cs": {}}
+    return _cached_data['rank_data']
 
-def load_cdn_data():
-    if os.path.exists(CDN_FILE):
-        with open(CDN_FILE, 'r') as f:
-            return json.load(f)
-    return []
+def load_cdn_data(force_reload=False):
+    """Load CDN data with caching"""
+    if _cached_data['cdn_data'] is None or force_reload:
+        if os.path.exists(CDN_FILE):
+            with open(CDN_FILE, 'r') as f:
+                _cached_data['cdn_data'] = json.load(f)
+        else:
+            _cached_data['cdn_data'] = []
+    return _cached_data['cdn_data']
 
-def load_item_data():
-    if os.path.exists(ITEM_DATA_FILE):
-        with open(ITEM_DATA_FILE, 'r') as f:
-            return json.load(f)
-    return []
+def load_item_data(force_reload=False):
+    """Load item data with caching"""
+    if _cached_data['item_data'] is None or force_reload:
+        if os.path.exists(ITEM_DATA_FILE):
+            with open(ITEM_DATA_FILE, 'r') as f:
+                _cached_data['item_data'] = json.load(f)
+        else:
+            _cached_data['item_data'] = []
+    return _cached_data['item_data']
 
-def get_item_info(item_id, item_data, cdn_data):
+def get_item_info(item_id, item_data=None, cdn_data=None):
+    """Get item info with optional pre-loaded data"""
     item_id_str = str(item_id)
+    
+    # Use cached data if not provided
+    if item_data is None:
+        item_data = load_item_data()
+    if cdn_data is None:
+        cdn_data = load_cdn_data()
     
     for item in item_data:
         if str(item.get('itemID')) == item_id_str:
@@ -114,8 +140,11 @@ def format_date(timestamp):
     except:
         return "N/A"
 
-def get_br_rank(points):
-    rank_data = load_rank_data()
+def get_br_rank(points, rank_data=None):
+    """Get BR rank with optional pre-loaded rank data"""
+    if rank_data is None:
+        rank_data = load_rank_data()
+    
     br_ranks = rank_data.get("br", {})
     
     if points == "N/A" or points is None or points == "":
@@ -131,8 +160,11 @@ def get_br_rank(points):
             return rank_name
     return "Unranked"
 
-def get_cs_rank(stars):
-    rank_data = load_rank_data()
+def get_cs_rank(stars, rank_data=None):
+    """Get CS rank with optional pre-loaded rank data"""
+    if rank_data is None:
+        rank_data = load_rank_data()
+    
     cs_ranks = rank_data.get("cs", {})
     
     if stars == "N/A" or stars is None or stars == "":
@@ -166,7 +198,9 @@ def print_info(label, value, label_color=Colors.YELLOW, value_color=Colors.END):
         print(f"{label_color}{label}:{Colors.END} {Colors.RED}N/A{Colors.END}")
 
 def print_info_with_asset(label, value, item_id, label_color=Colors.YELLOW):
+    """Print info with asset details using cached data"""
     if value and value != "N/A" and value != "" and value != "None":
+        # Load data once and reuse
         item_data = load_item_data()
         cdn_data = load_cdn_data()
         item_info = get_item_info(item_id, item_data, cdn_data)
@@ -206,12 +240,16 @@ def save_player_data(uid, data):
     return player_name
 
 def show_changes(uid, old_data, new_data):
+    """Show changes with cached rank data"""
     print_section("CHANGES DETECTED", Colors.GOLD)
     
     old_acc = old_data.get("AccountInfo", {})
     new_acc = new_data.get("AccountInfo", {})
     old_profile = old_data.get("AccountProfileInfo", {})
     new_profile = new_data.get("AccountProfileInfo", {})
+    
+    # Load rank data once for both BR and CS
+    rank_data = load_rank_data()
     
     changes = []
     
@@ -227,15 +265,15 @@ def show_changes(uid, old_data, new_data):
     old_br = old_profile.get('BrRankPoint', 'N/A')
     new_br = new_profile.get('BrRankPoint', 'N/A')
     if old_br != new_br:
-        old_rank = get_br_rank(old_br)
-        new_rank = get_br_rank(new_br)
+        old_rank = get_br_rank(old_br, rank_data)
+        new_rank = get_br_rank(new_br, rank_data)
         changes.append(f"BR Rank: {Colors.RED}{old_rank} ({old_br}){Colors.END} → {Colors.GREEN}{new_rank} ({new_br}){Colors.END}")
     
     old_cs = old_profile.get('CsRankPoint', 'N/A')
     new_cs = new_profile.get('CsRankPoint', 'N/A')
     if old_cs != new_cs:
-        old_rank = get_cs_rank(old_cs)
-        new_rank = get_cs_rank(new_cs)
+        old_rank = get_cs_rank(old_cs, rank_data)
+        new_rank = get_cs_rank(new_cs, rank_data)
         changes.append(f"CS Rank: {Colors.RED}{old_rank} ({old_cs}★){Colors.END} → {Colors.GREEN}{new_rank} ({new_cs}★){Colors.END}")
     
     if changes:
@@ -255,6 +293,7 @@ def export_player_json(uid, data):
     return filename
 
 def compare_players(uid1, uid2):
+    """Compare players with cached data"""
     db = load_players_db()
     
     if uid1 not in db or uid2 not in db:
@@ -287,12 +326,15 @@ def compare_players(uid1, uid2):
     likes_diff = p2_likes - p1_likes
     print_info(f"Likes", f"{p1_likes} → {p2_likes} ({'+' if likes_diff > 0 else ''}{likes_diff})", Colors.YELLOW, Colors.GREEN if likes_diff > 0 else Colors.RED if likes_diff < 0 else Colors.END)
     
+    # Load rank data once for both comparisons
+    rank_data = load_rank_data()
+    
     p1_br = p1_profile.get('BrRankPoint', 'N/A')
     p2_br = p2_profile.get('BrRankPoint', 'N/A')
     if p1_br != 'N/A' and p2_br != 'N/A':
         br_diff = int(p2_br) - int(p1_br)
-        p1_rank = get_br_rank(p1_br)
-        p2_rank = get_br_rank(p2_br)
+        p1_rank = get_br_rank(p1_br, rank_data)
+        p2_rank = get_br_rank(p2_br, rank_data)
         print_info(f"BR Rank", f"{p1_rank} ({p1_br}) → {p2_rank} ({p2_br}) ({'+' if br_diff > 0 else ''}{br_diff} RP)", Colors.YELLOW, Colors.GREEN if br_diff > 0 else Colors.RED if br_diff < 0 else Colors.END)
     else:
         print_info("BR Rank", "N/A")
@@ -301,8 +343,8 @@ def compare_players(uid1, uid2):
     p2_cs = p2_profile.get('CsRankPoint', 'N/A')
     if p1_cs != 'N/A' and p2_cs != 'N/A' and p1_cs is not None and p2_cs is not None:
         cs_diff = int(p2_cs) - int(p1_cs)
-        p1_rank = get_cs_rank(p1_cs)
-        p2_rank = get_cs_rank(p2_cs)
+        p1_rank = get_cs_rank(p1_cs, rank_data)
+        p2_rank = get_cs_rank(p2_cs, rank_data)
         print_info(f"CS Rank", f"{p1_rank} ({p1_cs}★) → {p2_rank} ({p2_cs}★) ({'+' if cs_diff > 0 else ''}{cs_diff}★)", Colors.YELLOW, Colors.GREEN if cs_diff > 0 else Colors.RED if cs_diff < 0 else Colors.END)
     else:
         print_info("CS Rank", "N/A")
@@ -371,11 +413,14 @@ def get_player_info(uid, region="BD", config=None):
             print_info("Release Version", data.get('ReleaseVersion', 'N/A'))
             print_info("Account Type", data.get('AccountType', 'N/A'))
             
+            # Load rank data once for both BR and CS
+            rank_data = load_rank_data()
+            
             br_points = profile.get('BrRankPoint', 'N/A')
             cs_stars = profile.get('CsRankPoint', 'N/A')
             
-            br_rank = get_br_rank(br_points) if br_points != 'N/A' else 'N/A'
-            cs_rank = get_cs_rank(cs_stars) if cs_stars != 'N/A' else 'N/A'
+            br_rank = get_br_rank(br_points, rank_data) if br_points != 'N/A' else 'N/A'
+            cs_rank = get_cs_rank(cs_stars, rank_data) if cs_stars != 'N/A' else 'N/A'
             
             print_info("BR Rank", f"{br_rank} ({br_points} RP)", value_color=Colors.GREEN)
             print_info("BR Max Rank", profile.get('BrMaxRank', 'N/A'))

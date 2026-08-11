@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import sys
 from datetime import datetime
 
 BASE_URL = "https://api.gameskinbo.com/ff-info/get"
@@ -11,11 +12,28 @@ ASSETS_DIR = "assets"
 CDN_FILE = f"{ASSETS_DIR}/cdn.json"
 ITEM_DATA_FILE = f"{ASSETS_DIR}/itemData.json"
 
-# Cache for loaded data
+# Cache for loaded data with indexes
 _cached_data = {
     'rank_data': None,
     'cdn_data': None,
-    'item_data': None
+    'item_data': None,
+    'items_by_id': None,
+    'cdn_by_id': None,
+    'cdn_loaded': False
+}
+
+# Display sections configuration
+DISPLAY_SECTIONS = {
+    'account_info': True,
+    'account_activity': True,
+    'equipped_items': True,
+    'outfit': True,
+    'weapons': True,
+    'skills': True,
+    'pet_details': True,
+    'guild_info': True,
+    'guild_leader': True,
+    'api_usage': True
 }
 
 def load_config():
@@ -49,53 +67,69 @@ def load_rank_data(force_reload=False):
     return _cached_data['rank_data']
 
 def load_cdn_data(force_reload=False):
-    """Load CDN data with caching"""
-    if _cached_data['cdn_data'] is None or force_reload:
+    """Load CDN data with caching and indexing"""
+    if not _cached_data['cdn_loaded'] or force_reload:
         if os.path.exists(CDN_FILE):
             with open(CDN_FILE, 'r') as f:
                 _cached_data['cdn_data'] = json.load(f)
         else:
             _cached_data['cdn_data'] = []
+        
+        # Build CDN index for O(1) lookups
+        _cached_data['cdn_by_id'] = {}
+        for cdn_entry in _cached_data['cdn_data']:
+            for item_id, url in cdn_entry.items():
+                _cached_data['cdn_by_id'][item_id] = url
+        
+        _cached_data['cdn_loaded'] = True
+    
     return _cached_data['cdn_data']
 
 def load_item_data(force_reload=False):
-    """Load item data with caching"""
+    """Load item data with caching and indexing"""
     if _cached_data['item_data'] is None or force_reload:
         if os.path.exists(ITEM_DATA_FILE):
             with open(ITEM_DATA_FILE, 'r') as f:
                 _cached_data['item_data'] = json.load(f)
         else:
             _cached_data['item_data'] = []
+        
+        # Build item index for O(1) lookups
+        _cached_data['items_by_id'] = {}
+        for item in _cached_data['item_data']:
+            item_id = str(item.get('itemID'))
+            if item_id:
+                _cached_data['items_by_id'][item_id] = item
+    
     return _cached_data['item_data']
 
 def get_item_info(item_id, item_data=None, cdn_data=None):
-    """Get item info with optional pre-loaded data"""
+    """Get item info using indexed lookups - O(1) instead of O(n)"""
     item_id_str = str(item_id)
     
-    # Use cached data if not provided
+    # Ensure indexes are built
     if item_data is None:
-        item_data = load_item_data()
+        load_item_data()
     if cdn_data is None:
-        cdn_data = load_cdn_data()
+        load_cdn_data()
     
-    for item in item_data:
-        if str(item.get('itemID')) == item_id_str:
-            description = item.get('description', '')
-            rare = item.get('Rare', 'NONE')
-            item_type = item.get('itemType', '')
-            
-            cdn_url = None
-            for cdn in cdn_data:
-                if item_id_str in cdn:
-                    cdn_url = cdn[item_id_str]
-                    break
-            
-            return {
-                'description': description,
-                'rare': rare,
-                'item_type': item_type,
-                'cdn_url': cdn_url
-            }
+    # O(1) lookup using index
+    item = _cached_data['items_by_id'].get(item_id_str)
+    
+    if item:
+        description = item.get('description', '')
+        rare = item.get('Rare', 'NONE')
+        item_type = item.get('itemType', '')
+        
+        # O(1) CDN lookup using index
+        cdn_url = _cached_data['cdn_by_id'].get(item_id_str)
+        
+        return {
+            'description': description,
+            'rare': rare,
+            'item_type': item_type,
+            'cdn_url': cdn_url
+        }
     return None
 
 def get_rare_color(rare):
@@ -198,12 +232,14 @@ def print_info(label, value, label_color=Colors.YELLOW, value_color=Colors.END):
         print(f"{label_color}{label}:{Colors.END} {Colors.RED}N/A{Colors.END}")
 
 def print_info_with_asset(label, value, item_id, label_color=Colors.YELLOW):
-    """Print info with asset details using cached data"""
+    """Print info with asset details using indexed data - O(1) lookup"""
     if value and value != "N/A" and value != "" and value != "None":
-        # Load data once and reuse
-        item_data = load_item_data()
-        cdn_data = load_cdn_data()
-        item_info = get_item_info(item_id, item_data, cdn_data)
+        # Load and index data once
+        load_item_data()
+        load_cdn_data()
+        
+        # O(1) lookup using indexes
+        item_info = get_item_info(item_id)
         
         display_value = str(value)
         if item_info:
@@ -349,15 +385,23 @@ def compare_players(uid1, uid2):
     else:
         print_info("CS Rank", "N/A")
 
-def get_player_info(uid, region="BD", config=None):
+def get_player_info(uid, region="BD", config=None, quiet=False):
+    """
+    Get player info with optional quiet mode for non-interactive use
+    """
     if not config or not config.get("api_key"):
-        print_colored("No API key found! Please set your API key first.", Colors.RED)
+        if not quiet:
+            print_colored("No API key found! Please set your API key first.", Colors.RED)
         return None
     
     headers = {"x-api-key": config["api_key"]}
     params = {"uid": uid, "region": region}
     
     try:
+        if not quiet:
+            print_colored(f"\n{Colors.BLUE}Fetching info for UID: {uid} (Region: {region}){Colors.END}")
+            print_colored("Please wait...", Colors.CYAN)
+        
         response = requests.get(BASE_URL, headers=headers, params=params, timeout=15)
         
         config["total_requests"] = config.get("total_requests", 0) + 1
@@ -367,169 +411,272 @@ def get_player_info(uid, region="BD", config=None):
             data = response.json()
             
             db = load_players_db()
-            if uid in db:
+            if uid in db and not quiet:
                 old_data = db[uid]['data']
                 show_changes(uid, old_data, data)
             
             player_name = save_player_data(uid, data)
             
-            acc = data.get("AccountInfo", {})
-            profile = data.get("AccountProfileInfo", {})
-            social = data.get("SocialInfo", {})
-            pet = data.get("PetInfo", {})
-            guild = data.get("GuildInfo", {})
-            guild_owner = data.get("GuildOwnerInfo", {})
-            credit = data.get("CreditScoreInfo", {})
-            equipped = data.get("EquippedItemsInfo", {})
+            # Display player info based on section toggles
+            display_player_info(data, uid, config, quiet)
             
-            print_section("PLAYER INFO", Colors.BLUE)
-            print_colored(f"\n{Colors.BOLD}{Colors.GREEN}{acc.get('AccountName', 'N/A')}{Colors.END}")
-            print_colored(f"Level {acc.get('AccountLevel', 'N/A')} • {acc.get('AccountLikes', 'N/A')} Likes", Colors.CYAN)
-            print_colored(f"ID opened: {format_date(acc.get('AccountCreateTime', 'N/A'))}", Colors.YELLOW)
-            
-            print_section("ACCOUNT INFO", Colors.BLUE)
-            print_info("UID", uid)
-            print_info("Name", acc.get('AccountName', 'N/A'))
-            print_info("Level", acc.get('AccountLevel', 'N/A'))
-            print_info("Region", acc.get('AccountRegion', 'N/A'))
-            print_info("Likes", acc.get('AccountLikes', 'N/A'))
-            print_info("Season ID", acc.get('AccountSeasonId', 'N/A'))
-            print_info("Credit Score", credit.get('creditScore', 'N/A'))
-            
-            if profile.get('Title') and profile.get('Title') != 'null':
-                title_id = profile.get('Title')
-                print_info_with_asset("Title", title_id, title_id)
-            else:
-                print_info("Title", profile.get('Title', 'N/A'))
-            
-            print_info("Bio", social.get('signature', 'N/A'))
-            print_info("Gender", social.get('gender', 'N/A'))
-            print_info("Language", social.get('language', 'N/A'))
-            print_info("Time Active", social.get('timeActive', 'N/A'))
-            print_info("Mode Prefer", social.get('modePrefer', 'N/A'))
-            print_info("Rank Show", social.get('rankShow', 'N/A'))
-            
-            print_section("ACCOUNT ACTIVITY", Colors.BLUE)
-            print_info("Release Version", data.get('ReleaseVersion', 'N/A'))
-            print_info("Account Type", data.get('AccountType', 'N/A'))
-            
-            # Load rank data once for both BR and CS
-            rank_data = load_rank_data()
-            
-            br_points = profile.get('BrRankPoint', 'N/A')
-            cs_stars = profile.get('CsRankPoint', 'N/A')
-            
-            br_rank = get_br_rank(br_points, rank_data) if br_points != 'N/A' else 'N/A'
-            cs_rank = get_cs_rank(cs_stars, rank_data) if cs_stars != 'N/A' else 'N/A'
-            
-            print_info("BR Rank", f"{br_rank} ({br_points} RP)", value_color=Colors.GREEN)
-            print_info("BR Max Rank", profile.get('BrMaxRank', 'N/A'))
-            print_info("CS Rank", f"{cs_rank} ({cs_stars}★)", value_color=Colors.GREEN)
-            print_info("CS Max Rank", profile.get('CsMaxRank', 'N/A'))
-            
-            print_info("Created At", format_date(acc.get('AccountCreateTime', 'N/A')), value_color=Colors.CYAN)
-            
-            last_login = format_date(acc.get('AccountLastLogin', 'N/A'))
-            print_info("Last Login", last_login, value_color=Colors.RED)
-            
-            print_section("EQUIPPED ITEMS", Colors.BLUE)
-            
-            avatar_id = equipped.get('EquippedAvatarId', 'N/A')
-            if avatar_id != 'N/A' and avatar_id != 'null':
-                print_info_with_asset("Avatar ID", avatar_id, avatar_id)
-            else:
-                print_info("Avatar ID", avatar_id)
-            
-            banner_id = equipped.get('EquippedBannerId', 'N/A')
-            if banner_id != 'N/A' and banner_id != 'null':
-                print_info_with_asset("Banner ID", banner_id, banner_id)
-            else:
-                print_info("Banner ID", banner_id)
-            
-            print_info("BP Badges", equipped.get('EquippedBPBadges', 'N/A'))
-            
-            bp_id = equipped.get('EquippedBPID', 'N/A')
-            if bp_id != 'N/A' and bp_id != 'null':
-                print_info_with_asset("BP ID", bp_id, bp_id)
-            else:
-                print_info("BP ID", bp_id)
-            
-            show_br = "Yes" if profile.get('ShowBrRank', False) else "No"
-            show_cs = "Yes" if profile.get('ShowCsRank', False) else "No"
-            print_info("Show BR Rank", show_br)
-            print_info("Show CS Rank", show_cs)
-            
-            outfit = equipped.get('EquippedOutfit', [])
-            if outfit:
-                print_section("OUTFIT", Colors.BLUE)
-                for i, item in enumerate(outfit, 1):
-                    print_info_with_asset(f"  Item {i}", item, item)
-            
-            weapons = equipped.get('EquippedWeapon', [])
-            if weapons:
-                print_section("WEAPONS", Colors.BLUE)
-                for i, item in enumerate(weapons, 1):
-                    print_info_with_asset(f"  Weapon {i}", item, item)
-            
-            skills = equipped.get('EquippedSkills', [])
-            if skills:
-                print_section("SKILLS", Colors.BLUE)
-                skill_groups = [skills[i:i+4] for i in range(0, len(skills), 4)]
-                for i, group in enumerate(skill_groups, 1):
-                    print_info(f"  Skill Slot {i}", ", ".join(str(s) for s in group))
-            
-            if pet:
-                print_section("PET DETAILS", Colors.BLUE)
-                pet_id = pet.get('id', 'N/A')
-                if pet_id != 'N/A' and pet_id != 'null':
-                    print_info_with_asset("Pet ID", pet_id, pet_id)
-                else:
-                    print_info("Pet ID", pet_id)
-                print_info("Pet Level", pet.get('level', 'N/A'))
-                print_info("Pet Exp", pet.get('exp', 'N/A'))
-                print_info("Pet Selected", "Yes" if pet.get('isSelected', False) else "No")
-                print_info("Pet Skill ID", pet.get('selectedSkillId', 'N/A'))
-                print_info("Pet Skin ID", pet.get('skinId', 'N/A'))
-            
-            if guild and guild.get('GuildID') and guild.get('GuildID') != 'None':
-                print_section("GUILD INFO", Colors.BLUE)
-                print_info("Guild Name", guild.get('GuildName', 'N/A'), value_color=Colors.PURPLE)
-                print_info("Guild ID", guild.get('GuildID', 'N/A'))
-                print_info("Guild Level", guild.get('GuildLevel', 'N/A'))
-                print_info("Guild Members", f"{guild.get('GuildMember', 'N/A')}/30")
-                print_info("Guild Owner", guild.get('GuildOwner', 'N/A'))
-                
-                if guild_owner:
-                    print_section("GUILD LEADER", Colors.BLUE)
-                    print_colored(f"\n{Colors.BOLD}{Colors.GREEN}{guild_owner.get('nickname', 'N/A')}{Colors.END}")
-                    print_info("UID", guild_owner.get('accountId', 'N/A'))
-                    print_info("Level", guild_owner.get('level', 'N/A'))
-                    print_info("Likes", guild_owner.get('liked', 'N/A'))
-                    print_info("BR Rank", f"{guild_owner.get('rank', 'N/A')} ({guild_owner.get('rankingPoints', 'N/A')} RP)")
-                    print_info("CS Rank", guild_owner.get('csRank', 'N/A'))
-                    print_info("Created At", format_date(guild_owner.get('createAt', 'N/A')), value_color=Colors.CYAN)
-                    
-                    leader_last_login = format_date(guild_owner.get('lastLoginAt', 'N/A'))
-                    print_info("Last Login", leader_last_login, value_color=Colors.RED)
-            
-            print_section("API USAGE", Colors.GOLD)
-            print_info("Total API Requests", config.get("total_requests", 0))
-            
-            print_colored("\n" + "-"*40, Colors.CYAN)
-            export_choice = input(f"{Colors.YELLOW}Export player data to JSON? (y/n): {Colors.END}").strip().lower()
-            if export_choice == 'y':
-                export_player_json(uid, data)
+            if not quiet:
+                print_colored("\n" + "-"*40, Colors.CYAN)
+                export_choice = input(f"{Colors.YELLOW}Export player data to JSON? (y/n): {Colors.END}").strip().lower()
+                if export_choice == 'y':
+                    export_player_json(uid, data)
             
             return data
             
         else:
-            print_colored(f"Error {response.status_code}", Colors.RED)
-            print(response.text)
+            if not quiet:
+                print_colored(f"Error {response.status_code}", Colors.RED)
+                print(response.text)
             return None
             
     except requests.exceptions.RequestException as e:
-        print_colored(f"Request failed: {e}", Colors.RED)
+        if not quiet:
+            print_colored(f"Request failed: {e}", Colors.RED)
         return None
+
+def display_player_info(data, uid, config, quiet=False):
+    """Display player info with section toggles"""
+    acc = data.get("AccountInfo", {})
+    profile = data.get("AccountProfileInfo", {})
+    social = data.get("SocialInfo", {})
+    pet = data.get("PetInfo", {})
+    guild = data.get("GuildInfo", {})
+    guild_owner = data.get("GuildOwnerInfo", {})
+    credit = data.get("CreditScoreInfo", {})
+    equipped = data.get("EquippedItemsInfo", {})
+    
+    # Always show player header
+    print_section("PLAYER INFO", Colors.BLUE)
+    print_colored(f"\n{Colors.BOLD}{Colors.GREEN}{acc.get('AccountName', 'N/A')}{Colors.END}")
+    print_colored(f"Level {acc.get('AccountLevel', 'N/A')} • {acc.get('AccountLikes', 'N/A')} Likes", Colors.CYAN)
+    print_colored(f"ID opened: {format_date(acc.get('AccountCreateTime', 'N/A'))}", Colors.YELLOW)
+    
+    # Account Info
+    if DISPLAY_SECTIONS['account_info']:
+        print_section("ACCOUNT INFO", Colors.BLUE)
+        print_info("UID", uid)
+        print_info("Name", acc.get('AccountName', 'N/A'))
+        print_info("Level", acc.get('AccountLevel', 'N/A'))
+        print_info("Region", acc.get('AccountRegion', 'N/A'))
+        print_info("Likes", acc.get('AccountLikes', 'N/A'))
+        print_info("Season ID", acc.get('AccountSeasonId', 'N/A'))
+        print_info("Credit Score", credit.get('creditScore', 'N/A'))
+        
+        if profile.get('Title') and profile.get('Title') != 'null':
+            title_id = profile.get('Title')
+            print_info_with_asset("Title", title_id, title_id)
+        else:
+            print_info("Title", profile.get('Title', 'N/A'))
+        
+        print_info("Bio", social.get('signature', 'N/A'))
+        print_info("Gender", social.get('gender', 'N/A'))
+        print_info("Language", social.get('language', 'N/A'))
+        print_info("Time Active", social.get('timeActive', 'N/A'))
+        print_info("Mode Prefer", social.get('modePrefer', 'N/A'))
+        print_info("Rank Show", social.get('rankShow', 'N/A'))
+    
+    # Account Activity
+    if DISPLAY_SECTIONS['account_activity']:
+        print_section("ACCOUNT ACTIVITY", Colors.BLUE)
+        print_info("Release Version", data.get('ReleaseVersion', 'N/A'))
+        print_info("Account Type", data.get('AccountType', 'N/A'))
+        
+        # Load rank data once for both BR and CS
+        rank_data = load_rank_data()
+        
+        br_points = profile.get('BrRankPoint', 'N/A')
+        cs_stars = profile.get('CsRankPoint', 'N/A')
+        
+        br_rank = get_br_rank(br_points, rank_data) if br_points != 'N/A' else 'N/A'
+        cs_rank = get_cs_rank(cs_stars, rank_data) if cs_stars != 'N/A' else 'N/A'
+        
+        print_info("BR Rank", f"{br_rank} ({br_points} RP)", value_color=Colors.GREEN)
+        print_info("BR Max Rank", profile.get('BrMaxRank', 'N/A'))
+        print_info("CS Rank", f"{cs_rank} ({cs_stars}★)", value_color=Colors.GREEN)
+        print_info("CS Max Rank", profile.get('CsMaxRank', 'N/A'))
+        
+        print_info("Created At", format_date(acc.get('AccountCreateTime', 'N/A')), value_color=Colors.CYAN)
+        
+        last_login = format_date(acc.get('AccountLastLogin', 'N/A'))
+        print_info("Last Login", last_login, value_color=Colors.RED)
+    
+    # Equipped Items
+    if DISPLAY_SECTIONS['equipped_items']:
+        print_section("EQUIPPED ITEMS", Colors.BLUE)
+        
+        avatar_id = equipped.get('EquippedAvatarId', 'N/A')
+        if avatar_id != 'N/A' and avatar_id != 'null':
+            print_info_with_asset("Avatar ID", avatar_id, avatar_id)
+        else:
+            print_info("Avatar ID", avatar_id)
+        
+        banner_id = equipped.get('EquippedBannerId', 'N/A')
+        if banner_id != 'N/A' and banner_id != 'null':
+            print_info_with_asset("Banner ID", banner_id, banner_id)
+        else:
+            print_info("Banner ID", banner_id)
+        
+        print_info("BP Badges", equipped.get('EquippedBPBadges', 'N/A'))
+        
+        bp_id = equipped.get('EquippedBPID', 'N/A')
+        if bp_id != 'N/A' and bp_id != 'null':
+            print_info_with_asset("BP ID", bp_id, bp_id)
+        else:
+            print_info("BP ID", bp_id)
+        
+        show_br = "Yes" if profile.get('ShowBrRank', False) else "No"
+        show_cs = "Yes" if profile.get('ShowCsRank', False) else "No"
+        print_info("Show BR Rank", show_br)
+        print_info("Show CS Rank", show_cs)
+    
+    # Outfit
+    if DISPLAY_SECTIONS['outfit']:
+        outfit = equipped.get('EquippedOutfit', [])
+        if outfit:
+            print_section("OUTFIT", Colors.BLUE)
+            for i, item in enumerate(outfit, 1):
+                print_info_with_asset(f"  Item {i}", item, item)
+    
+    # Weapons
+    if DISPLAY_SECTIONS['weapons']:
+        weapons = equipped.get('EquippedWeapon', [])
+        if weapons:
+            print_section("WEAPONS", Colors.BLUE)
+            for i, item in enumerate(weapons, 1):
+                print_info_with_asset(f"  Weapon {i}", item, item)
+    
+    # Skills
+    if DISPLAY_SECTIONS['skills']:
+        skills = equipped.get('EquippedSkills', [])
+        if skills:
+            print_section("SKILLS", Colors.BLUE)
+            skill_groups = [skills[i:i+4] for i in range(0, len(skills), 4)]
+            for i, group in enumerate(skill_groups, 1):
+                print_info(f"  Skill Slot {i}", ", ".join(str(s) for s in group))
+    
+    # Pet Details
+    if DISPLAY_SECTIONS['pet_details']:
+        if pet:
+            print_section("PET DETAILS", Colors.BLUE)
+            pet_id = pet.get('id', 'N/A')
+            if pet_id != 'N/A' and pet_id != 'null':
+                print_info_with_asset("Pet ID", pet_id, pet_id)
+            else:
+                print_info("Pet ID", pet_id)
+            print_info("Pet Level", pet.get('level', 'N/A'))
+            print_info("Pet Exp", pet.get('exp', 'N/A'))
+            print_info("Pet Selected", "Yes" if pet.get('isSelected', False) else "No")
+            print_info("Pet Skill ID", pet.get('selectedSkillId', 'N/A'))
+            print_info("Pet Skin ID", pet.get('skinId', 'N/A'))
+    
+    # Guild Info
+    if DISPLAY_SECTIONS['guild_info']:
+        if guild and guild.get('GuildID') and guild.get('GuildID') != 'None':
+            print_section("GUILD INFO", Colors.BLUE)
+            print_info("Guild Name", guild.get('GuildName', 'N/A'), value_color=Colors.PURPLE)
+            print_info("Guild ID", guild.get('GuildID', 'N/A'))
+            print_info("Guild Level", guild.get('GuildLevel', 'N/A'))
+            print_info("Guild Members", f"{guild.get('GuildMember', 'N/A')}/30")
+            print_info("Guild Owner", guild.get('GuildOwner', 'N/A'))
+    
+    # Guild Leader
+    if DISPLAY_SECTIONS['guild_leader']:
+        if guild_owner:
+            print_section("GUILD LEADER", Colors.BLUE)
+            print_colored(f"\n{Colors.BOLD}{Colors.GREEN}{guild_owner.get('nickname', 'N/A')}{Colors.END}")
+            print_info("UID", guild_owner.get('accountId', 'N/A'))
+            print_info("Level", guild_owner.get('level', 'N/A'))
+            print_info("Likes", guild_owner.get('liked', 'N/A'))
+            print_info("BR Rank", f"{guild_owner.get('rank', 'N/A')} ({guild_owner.get('rankingPoints', 'N/A')} RP)")
+            print_info("CS Rank", guild_owner.get('csRank', 'N/A'))
+            print_info("Created At", format_date(guild_owner.get('createAt', 'N/A')), value_color=Colors.CYAN)
+            
+            leader_last_login = format_date(guild_owner.get('lastLoginAt', 'N/A'))
+            print_info("Last Login", leader_last_login, value_color=Colors.RED)
+    
+    # API Usage
+    if DISPLAY_SECTIONS['api_usage']:
+        print_section("API USAGE", Colors.GOLD)
+        print_info("Total API Requests", config.get("total_requests", 0))
+
+def display_sections_menu():
+    """Display and manage display sections"""
+    while True:
+        print_section("DISPLAY SECTIONS", Colors.GOLD)
+        print_colored("\n CURRENT STATUS:", Colors.CYAN, bold=True)
+        print()
+        
+        # Show current status
+        status_map = {
+            'account_info': 'Account Info',
+            'account_activity': 'Account Activity',
+            'equipped_items': 'Equipped Items',
+            'outfit': 'Outfit',
+            'weapons': 'Weapons',
+            'skills': 'Skills',
+            'pet_details': 'Pet Details',
+            'guild_info': 'Guild Info',
+            'guild_leader': 'Guild Leader',
+            'api_usage': 'API Usage'
+        }
+        
+        for key, label in status_map.items():
+            status = f"[{Colors.GREEN}✓{Colors.END}]" if DISPLAY_SECTIONS[key] else f"[{Colors.RED}✗{Colors.END}]"
+            print(f" {status} {label}")
+        
+        print_colored("\n" + "-"*50, Colors.CYAN)
+        print_colored(" [a] Toggle Account Info", Colors.CYAN)
+        print_colored(" [b] Toggle Account Activity", Colors.CYAN)
+        print_colored(" [c] Toggle Equipped Items", Colors.CYAN)
+        print_colored(" [d] Toggle Outfit", Colors.CYAN)
+        print_colored(" [e] Toggle Weapons", Colors.CYAN)
+        print_colored(" [f] Toggle Skills", Colors.CYAN)
+        print_colored(" [g] Toggle Pet Details", Colors.CYAN)
+        print_colored(" [h] Toggle Guild Info", Colors.CYAN)
+        print_colored(" [i] Toggle Guild Leader", Colors.CYAN)
+        print_colored(" [j] Toggle API Usage", Colors.CYAN)
+        print()
+        print_colored(" [x] Enable All", Colors.GREEN)
+        print_colored(" [z] Disable All", Colors.RED)
+        print_colored(" [0] Back to Main Menu", Colors.YELLOW)
+        print_colored("-"*50, Colors.CYAN)
+        
+        choice = get_input(f"{Colors.YELLOW}Enter option: {Colors.END}")
+        
+        if choice == '0':
+            break
+        elif choice == 'x':
+            for key in DISPLAY_SECTIONS:
+                DISPLAY_SECTIONS[key] = True
+            print_colored("All sections enabled!", Colors.GREEN)
+        elif choice == 'z':
+            for key in DISPLAY_SECTIONS:
+                DISPLAY_SECTIONS[key] = False
+            print_colored("All sections disabled!", Colors.RED)
+        elif choice in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']:
+            section_map = {
+                'a': 'account_info',
+                'b': 'account_activity',
+                'c': 'equipped_items',
+                'd': 'outfit',
+                'e': 'weapons',
+                'f': 'skills',
+                'g': 'pet_details',
+                'h': 'guild_info',
+                'i': 'guild_leader',
+                'j': 'api_usage'
+            }
+            key = section_map[choice]
+            DISPLAY_SECTIONS[key] = not DISPLAY_SECTIONS[key]
+            status = "enabled" if DISPLAY_SECTIONS[key] else "disabled"
+            print_colored(f"Section toggled: {status}", Colors.GREEN if DISPLAY_SECTIONS[key] else Colors.RED)
+        else:
+            print_colored("Invalid option!", Colors.RED)
 
 def view_history():
     db = load_players_db()
@@ -598,6 +745,27 @@ def get_input(prompt):
 def main():
     config = load_config()
     
+    # Check for non-interactive mode (UID passed as argument)
+    if len(sys.argv) > 1:
+        uid = sys.argv[1]
+        region = sys.argv[2] if len(sys.argv) > 2 else "BD"
+        
+        print_colored("\n" + "="*60, Colors.CYAN)
+        print_colored(" FREE FIRE PLAYER INFO ", Colors.BLUE, bold=True)
+        print_colored("="*60, Colors.CYAN)
+        
+        if not config.get("api_key"):
+            print_colored("\nNo API key found!", Colors.RED)
+            sys.exit(1)
+        
+        # Load assets for faster display        load_item_data()
+        load_cdn_data()
+        load_rank_data()
+        
+        get_player_info(uid, region, config, quiet=False)
+        sys.exit(0)
+    
+    # Interactive mode
     print_colored("\n" + "="*60, Colors.CYAN)
     print_colored(" FREE FIRE PLAYER INFO ", Colors.BLUE, bold=True)
     print_colored("="*60, Colors.CYAN)
@@ -644,7 +812,8 @@ def main():
         print_colored(f"   [{Colors.BLUE}2{Colors.END}] View History", Colors.BLUE)
         print_colored(f"   [{Colors.PURPLE}3{Colors.END}] Compare Two Players", Colors.PURPLE)
         print_colored(f"   [{Colors.YELLOW}4{Colors.END}] Change API Key", Colors.YELLOW)
-        print_colored(f"   [{Colors.RED}5{Colors.END}] Exit", Colors.RED)
+        print_colored(f"   [{Colors.GOLD}5{Colors.END}] Display Sections", Colors.GOLD)
+        print_colored(f"   [{Colors.RED}6{Colors.END}] Exit", Colors.RED)
         print_colored("─"*40, Colors.CYAN)
         
         print_colored("\n💡 TIP: Enter letter for recent player, '0' for new UID, or [1-5] for main options", Colors.CYAN)
@@ -670,12 +839,14 @@ def main():
             if not region:
                 region = "BD"
             
-            print_colored(f"\n{Colors.BLUE}Fetching info for UID: {uid} (Region: {region}){Colors.END}")
-            print_colored("Please wait...", Colors.CYAN)
+            # Load assets for faster display
+            load_item_data()
+            load_cdn_data()
+            load_rank_data()
             
             get_player_info(uid, region, config)
             
-        elif choice in ['1', '2', '3', '4', '5']:
+        elif choice in ['1', '2', '3', '4', '5', '6']:
             if choice == '1':
                 uid = get_input(f"{Colors.YELLOW}Enter Free Fire UID (press Enter to cancel): {Colors.END}")
                 if uid == 'exit':
@@ -692,8 +863,10 @@ def main():
                 if not region:
                     region = "BD"
                 
-                print_colored(f"\n{Colors.BLUE}Fetching info for UID: {uid} (Region: {region}){Colors.END}")
-                print_colored("Please wait...", Colors.CYAN)
+                # Load assets for faster display
+                load_item_data()
+                load_cdn_data()
+                load_rank_data()
                 
                 get_player_info(uid, region, config)
                 
@@ -714,8 +887,11 @@ def main():
                     print_colored("API key updated successfully!", Colors.GREEN)
                 else:
                     print_colored("API key cannot be empty!", Colors.RED)
-                    
+            
             elif choice == '5':
+                display_sections_menu()
+                    
+            elif choice == '6':
                 print_colored("\nGoodbye!", Colors.CYAN)
                 break
         else:
@@ -725,6 +901,12 @@ def main():
                     if players and idx < len(players):
                         uid = players[idx][0]
                         region = "BD"
+                        
+                        # Load assets for faster display
+                        load_item_data()
+                        load_cdn_data()
+                        load_rank_data()
+                        
                         print_colored(f"\n{Colors.BLUE}Fetching info for {players[idx][1]['name']} ({uid}){Colors.END}")
                         print_colored("Please wait...", Colors.CYAN)
                         get_player_info(uid, region, config)

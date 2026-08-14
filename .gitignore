@@ -1,2 +1,6 @@
 config.json
-players_db.json
+data/players_db.json
+assets/__pycache__/*
+compare/__pycache__/*
+core/__pycache__/*
+display/__pycache__/*

@@ -35,7 +35,7 @@ pip install requests
 
 3. Run tge python code to configure it.
 ```bash
-python free-fire.py
+python main.py
 ```
 Configuration
 
@@ -51,8 +51,8 @@ Files Created Automatically
 
 File Purpose
 config.json Stores API key and request count
-players_db.json Database of all checked players
-rank_data.json BR and CS rank definitions
+data/players_db.json Database of all checked players
+data/rank_data.json BR and CS rank definitions
 assets/ Item data and CDN links
 
 Usage
@@ -60,7 +60,7 @@ Usage
 Run the script:
 
 ```bash
-python free-fire.py
+python main.py
 ```
 
 Menu Options
@@ -198,15 +198,26 @@ Data Sources
 File Structure
 
 ```
-FF/
-├── free-fire.py          # Main application
-├── config.json           # API key and settings
-├── players_db.json       # Player database
-├── rank_data.json        # Rank definitions
-├── assets/               # Item data folder
-│   ├── cdn.json          # CDN links for items
-│   └── itemData.json     # Item descriptions and metadata
-└── README.md            # This file
+freefire-player-info/
+├── main.py                      # Main application entry point
+├── config.json                  # API keys and settings
+├── README.md                    # Project documentation
+├── assets/                      # Item data files
+│   ├── cdn.json                 # CDN links for items
+│   └── itemData.json            # Item descriptions and metadata
+├── compare/                     # Player comparison module
+│   └── compare.py               # Comparison logic
+├── core/                        # Core functionality
+│   ├── api.py                   # API communication and key management
+│   ├── data.py                  # Data persistence and caching
+│   ├── utils.py                 # Utility functions and colors
+│   └── usage_cache.json         # Cached API usage data
+├── data/                        # Data storage
+│   ├── players_db.json          # Player database
+│   └── rank_data.json           # Rank definitions
+└── display/                     # Display module
+├── player.py                # Player info display logic
+└── display_config.json      # Display section preferences
 ```
 
 Rank Systems

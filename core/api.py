@@ -1,8 +1,3 @@
-__all__ = [
-    'load_config', 'save_config', 'get_active_api_key', 'add_api_key',
-    'remove_api_key', 'check_and_update_usage', 'get_cached_usage',
-    'get_all_cached_usage', 'refresh_all_keys_usage', 'switch_api_key'
-]
 import requests
 import json
 import os
@@ -131,21 +126,66 @@ def check_and_update_usage(config, force=False, api_key=None):
     return None
 
 def get_next_available_api_key(config):
-    """Find the next API key with available requests"""
+    """
+    Get the current active API key if it has remaining requests.
+    If not, find the next available key.
+    """
     if not config.get("api_keys"):
         return None, None
     
-    # Check usage for each key
     cache = load_usage_cache()
     current_month = date.today().replace(day=1).isoformat()
     
+    # Get current active index
+    current_idx = config.get("current_api_index", 0)
+    
+    # First, check if the current active key has remaining requests
+    current_key = config["api_keys"][current_idx]
+    
+    # Check if we have cached data for this key
+    cached_month = cache.get("month")
+    usage_data = cache.get("usage_data", {})
+    
+    if cached_month != current_month or current_key not in usage_data:
+        # Fetch fresh usage for current key
+        fresh_usage = get_api_usage(current_key)
+        if fresh_usage and "error" not in fresh_usage:
+            cache["month"] = current_month
+            cache["last_check"] = current_month
+            cache["usage_data"][current_key] = fresh_usage
+            save_usage_cache(cache)
+            usage_data = fresh_usage
+        else:
+            # If we can't get usage for current key, try others
+            return _find_next_available_key(config, start_idx=0)
+    else:
+        usage_data = cache["usage_data"].get(current_key, {})
+    
+    # If current key has remaining requests, use it
+    remaining = usage_data.get("remaining", 0)
+    if remaining > 0:
+        return current_key, usage_data
+    
+    # Current key has no remaining requests, find next available
+    return _find_next_available_key(config, start_idx=0)
+
+def _find_next_available_key(config, start_idx=0):
+    """Helper function to find the next available API key"""
+    cache = load_usage_cache()
+    current_month = date.today().replace(day=1).isoformat()
+    
+    # Check all keys starting from the beginning
     for idx, api_key in enumerate(config["api_keys"]):
-        # Check if we have cached data for this key this month
+        # Skip if this is the current key (already checked)
+        if idx == config.get("current_api_index", 0):
+            continue
+            
+        # Check if we have cached data for this key
         cached_month = cache.get("month")
         usage_data = cache.get("usage_data", {})
         
         if cached_month != current_month or api_key not in usage_data:
-            # Fetch fresh usage data
+            # Fetch fresh usage
             fresh_usage = get_api_usage(api_key)
             if fresh_usage and "error" not in fresh_usage:
                 cache["month"] = current_month
@@ -154,7 +194,6 @@ def get_next_available_api_key(config):
                 save_usage_cache(cache)
                 usage_data = fresh_usage
             else:
-                # Skip this key if we can't get usage
                 continue
         else:
             usage_data = cache["usage_data"].get(api_key, {})
@@ -162,6 +201,7 @@ def get_next_available_api_key(config):
         # Check if this key has remaining requests
         remaining = usage_data.get("remaining", 0)
         if remaining > 0:
+            # Switch to this key
             config["current_api_index"] = idx
             save_config(config)
             return api_key, usage_data
@@ -194,6 +234,8 @@ def switch_api_key(config, index):
     if 0 <= index < len(config["api_keys"]):
         config["current_api_index"] = index
         save_config(config)
+        # Force refresh usage for the new key
+        check_and_update_usage(config, force=True)
         return True
     return False
 
@@ -202,7 +244,7 @@ def get_active_api_key(config):
     if not config.get("api_keys"):
         return None, None
     
-    # Try to get next available key
+    # Try to get next available key (respects current active key)
     api_key, usage = get_next_available_api_key(config)
     
     if api_key:

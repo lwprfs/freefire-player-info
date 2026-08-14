@@ -1,19 +1,12 @@
 from core.utils import Colors, format_date, get_br_rank, get_cs_rank, get_rare_color, print_colored
-from core.data import load_rank_data, load_item_data, load_cdn_data, get_item_info
+from core.data import load_rank_data, load_item_data, load_cdn_data, get_item_info, load_display_config, save_display_config
 
-# Display sections configuration
-DISPLAY_SECTIONS = {
-    'account_info': True,
-    'account_activity': True,
-    'equipped_items': True,
-    'outfit': True,
-    'weapons': True,
-    'skills': True,
-    'pet_details': True,
-    'guild_info': True,
-    'guild_leader': True,
-    'api_usage': True
-}
+# Load display sections from config
+DISPLAY_SECTIONS = load_display_config()
+
+def save_current_display_config():
+    """Save current display section configuration"""
+    save_display_config(DISPLAY_SECTIONS)
 
 def print_section(title, color=Colors.CYAN):
     print_colored(f"\n{'='*50}", color)
@@ -45,8 +38,12 @@ def print_info_with_asset(label, value, item_id, label_color=Colors.YELLOW):
     else:
         print(f"{label_color}{label}:{Colors.END} {Colors.RED}N/A{Colors.END}")
 
-def display_player_info(data, uid, config, quiet=False):
+def display_player_info(data, uid, config, quiet=False, display_config=None):
     """Display player info with section toggles"""
+    if display_config:
+        global DISPLAY_SECTIONS
+        DISPLAY_SECTIONS = display_config
+    
     acc = data.get("AccountInfo", {})
     profile = data.get("AccountProfileInfo", {})
     social = data.get("SocialInfo", {})
@@ -62,8 +59,16 @@ def display_player_info(data, uid, config, quiet=False):
     print_colored(f"Level {acc.get('AccountLevel', 'N/A')} • {acc.get('AccountLikes', 'N/A')} Likes", Colors.CYAN)
     print_colored(f"ID opened: {format_date(acc.get('AccountCreateTime', 'N/A'))}", Colors.YELLOW)
     
+    # Show active API key info
+    if DISPLAY_SECTIONS.get('api_usage', True):
+        active_key = config.get("api_keys", [])[config.get("current_api_index", 0)] if config.get("api_keys") else "None"
+        if active_key != "None" and len(active_key) > 12:
+            print_colored(f"Active API Key: {Colors.GREEN}{active_key[:8]}...{active_key[-4:]}{Colors.END}", Colors.CYAN)
+        elif active_key != "None":
+            print_colored(f"Active API Key: {Colors.GREEN}{active_key}{Colors.END}", Colors.CYAN)
+    
     # Account Info
-    if DISPLAY_SECTIONS['account_info']:
+    if DISPLAY_SECTIONS.get('account_info', True):
         print_section("ACCOUNT INFO", Colors.BLUE)
         print_info("UID", uid)
         print_info("Name", acc.get('AccountName', 'N/A'))
@@ -87,7 +92,7 @@ def display_player_info(data, uid, config, quiet=False):
         print_info("Rank Show", social.get('rankShow', 'N/A'))
     
     # Account Activity
-    if DISPLAY_SECTIONS['account_activity']:
+    if DISPLAY_SECTIONS.get('account_activity', True):
         print_section("ACCOUNT ACTIVITY", Colors.BLUE)
         print_info("Release Version", data.get('ReleaseVersion', 'N/A'))
         print_info("Account Type", data.get('AccountType', 'N/A'))
@@ -112,7 +117,7 @@ def display_player_info(data, uid, config, quiet=False):
         print_info("Last Login", last_login, value_color=Colors.RED)
     
     # Equipped Items
-    if DISPLAY_SECTIONS['equipped_items']:
+    if DISPLAY_SECTIONS.get('equipped_items', True):
         print_section("EQUIPPED ITEMS", Colors.BLUE)
         
         avatar_id = equipped.get('EquippedAvatarId', 'N/A')
@@ -141,7 +146,7 @@ def display_player_info(data, uid, config, quiet=False):
         print_info("Show CS Rank", show_cs)
     
     # Outfit
-    if DISPLAY_SECTIONS['outfit']:
+    if DISPLAY_SECTIONS.get('outfit', True):
         outfit = equipped.get('EquippedOutfit', [])
         if outfit:
             print_section("OUTFIT", Colors.BLUE)
@@ -149,7 +154,7 @@ def display_player_info(data, uid, config, quiet=False):
                 print_info_with_asset(f"  Item {i}", item, item)
     
     # Weapons
-    if DISPLAY_SECTIONS['weapons']:
+    if DISPLAY_SECTIONS.get('weapons', True):
         weapons = equipped.get('EquippedWeapon', [])
         if weapons:
             print_section("WEAPONS", Colors.BLUE)
@@ -157,7 +162,7 @@ def display_player_info(data, uid, config, quiet=False):
                 print_info_with_asset(f"  Weapon {i}", item, item)
     
     # Skills
-    if DISPLAY_SECTIONS['skills']:
+    if DISPLAY_SECTIONS.get('skills', True):
         skills = equipped.get('EquippedSkills', [])
         if skills:
             print_section("SKILLS", Colors.BLUE)
@@ -166,7 +171,7 @@ def display_player_info(data, uid, config, quiet=False):
                 print_info(f"  Skill Slot {i}", ", ".join(str(s) for s in group))
     
     # Pet Details
-    if DISPLAY_SECTIONS['pet_details']:
+    if DISPLAY_SECTIONS.get('pet_details', True):
         if pet:
             print_section("PET DETAILS", Colors.BLUE)
             pet_id = pet.get('id', 'N/A')
@@ -181,7 +186,7 @@ def display_player_info(data, uid, config, quiet=False):
             print_info("Pet Skin ID", pet.get('skinId', 'N/A'))
     
     # Guild Info
-    if DISPLAY_SECTIONS['guild_info']:
+    if DISPLAY_SECTIONS.get('guild_info', True):
         if guild and guild.get('GuildID') and guild.get('GuildID') != 'None':
             print_section("GUILD INFO", Colors.BLUE)
             print_info("Guild Name", guild.get('GuildName', 'N/A'), value_color=Colors.PURPLE)
@@ -191,7 +196,7 @@ def display_player_info(data, uid, config, quiet=False):
             print_info("Guild Owner", guild.get('GuildOwner', 'N/A'))
     
     # Guild Leader
-    if DISPLAY_SECTIONS['guild_leader']:
+    if DISPLAY_SECTIONS.get('guild_leader', True):
         if guild_owner:
             print_section("GUILD LEADER", Colors.BLUE)
             print_colored(f"\n{Colors.BOLD}{Colors.GREEN}{guild_owner.get('nickname', 'N/A')}{Colors.END}")
@@ -206,12 +211,17 @@ def display_player_info(data, uid, config, quiet=False):
             print_info("Last Login", leader_last_login, value_color=Colors.RED)
     
     # API Usage
-    if DISPLAY_SECTIONS['api_usage']:
+    if DISPLAY_SECTIONS.get('api_usage', True):
         print_section("API USAGE", Colors.GOLD)
         print_info("Total API Requests", config.get("total_requests", 0))
+    
+    # Save the config if changed
+    save_current_display_config()
 
 def display_sections_menu():
-    """Display and manage display sections"""
+    """Display and manage display sections with persistence"""
+    global DISPLAY_SECTIONS
+    
     while True:
         print_section("DISPLAY SECTIONS", Colors.GOLD)
         print_colored("\n CURRENT STATUS:", Colors.CYAN, bold=True)
@@ -232,7 +242,7 @@ def display_sections_menu():
         }
         
         for key, label in status_map.items():
-            status = f"[{Colors.GREEN}✓{Colors.END}]" if DISPLAY_SECTIONS[key] else f"[{Colors.RED}✗{Colors.END}]"
+            status = f"[{Colors.GREEN}✓{Colors.END}]" if DISPLAY_SECTIONS.get(key, True) else f"[{Colors.RED}✗{Colors.END}]"
             print(f" {status} {label}")
         
         print_colored("\n" + "-"*50, Colors.CYAN)
@@ -255,15 +265,18 @@ def display_sections_menu():
         choice = get_input(f"{Colors.YELLOW}Enter option: {Colors.END}")
         
         if choice == '0':
+            save_current_display_config()
             break
         elif choice == 'x':
             for key in DISPLAY_SECTIONS:
                 DISPLAY_SECTIONS[key] = True
-            print_colored("All sections enabled!", Colors.GREEN)
+            save_current_display_config()
+            print_colored("All sections enabled and saved!", Colors.GREEN)
         elif choice == 'z':
             for key in DISPLAY_SECTIONS:
                 DISPLAY_SECTIONS[key] = False
-            print_colored("All sections disabled!", Colors.RED)
+            save_current_display_config()
+            print_colored("All sections disabled and saved!", Colors.RED)
         elif choice in ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']:
             section_map = {
                 'a': 'account_info',
@@ -278,9 +291,10 @@ def display_sections_menu():
                 'j': 'api_usage'
             }
             key = section_map[choice]
-            DISPLAY_SECTIONS[key] = not DISPLAY_SECTIONS[key]
+            DISPLAY_SECTIONS[key] = not DISPLAY_SECTIONS.get(key, True)
+            save_current_display_config()
             status = "enabled" if DISPLAY_SECTIONS[key] else "disabled"
-            print_colored(f"Section toggled: {status}", Colors.GREEN if DISPLAY_SECTIONS[key] else Colors.RED)
+            print_colored(f"Section toggled: {status} (saved)", Colors.GREEN if DISPLAY_SECTIONS[key] else Colors.RED)
         else:
             print_colored("Invalid option!", Colors.RED)
 

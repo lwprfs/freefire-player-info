@@ -1,4 +1,6 @@
 config.json
+display/display_config.json
+core/usage_cache.json
 data/players_db.json
 assets/__pycache__/*
 compare/__pycache__/*

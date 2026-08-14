@@ -7,6 +7,7 @@ RANK_DATA_FILE = "data/rank_data.json"
 ASSETS_DIR = "assets"
 CDN_FILE = f"{ASSETS_DIR}/cdn.json"
 ITEM_DATA_FILE = f"{ASSETS_DIR}/itemData.json"
+DISPLAY_CONFIG_FILE = "display/display_config.json"
 
 # Cache for loaded data with indexes
 _cached_data = {
@@ -17,6 +18,28 @@ _cached_data = {
     'cdn_by_id': None,
     'cdn_loaded': False
 }
+
+def load_display_config():
+    """Load display section configuration"""
+    if os.path.exists(DISPLAY_CONFIG_FILE):
+        with open(DISPLAY_CONFIG_FILE, 'r') as f:
+            return json.load(f)
+    return {
+        'account_info': True,
+        'account_activity': True,
+        'equipped_items': True,
+        'outfit': True,
+        'weapons': True,
+        'skills': True,
+        'pet_details': True,
+        'guild_info': True,
+        'guild_leader': True,
+        'api_usage': True
+    }
+
+def save_display_config(config):
+    with open(DISPLAY_CONFIG_FILE, 'w') as f:
+        json.dump(config, f, indent=2)
 
 def load_players_db():
     if os.path.exists(PLAYERS_DB):

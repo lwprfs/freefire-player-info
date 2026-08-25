@@ -1,5 +1,5 @@
 /**
- * Free Fire Player Info - Full Version with Item Database & Popup
+ * Free Fire Player Info - Fixed with Pet Images on Main Page
  */
 
 // ================================
@@ -18,9 +18,9 @@ const STATE = {
     isDark: true,
     rankData: null,
     itemData: null,
-    cdnData: null,
+    cdn_img_json: {},
+    pngs_json_list: [],
     itemIndex: {},
-    cdnIndex: {},
 };
 
 const DOM = {};
@@ -111,68 +111,75 @@ function cacheDom() {
 }
 
 // ================================
-// Load Item Database
+// Load Data
 // ================================
 
-async function loadItemDatabase() {
+async function loadData() {
     try {
-        // Load itemData.json
-        const itemResponse = await fetch('assets/itemData.json');
-        if (!itemResponse.ok) {
-            console.warn('⚠️ Could not load itemData.json');
-            return;
-        }
-        const itemData = await itemResponse.json();
+        const [cdnData, pngsData, itemDatar] = await Promise.all([
+            fetch('assets/cdn.json').then((res) => res.json()),
+            fetch('https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/list.json').then((res) => res.json()),
+            fetch('assets/itemData.json').then((res) => res.json()),
+        ]);
 
-        // Load cdn.json
-        const cdnResponse = await fetch('assets/cdn.json');
-        let cdnData = null;
-        if (cdnResponse.ok) {
-            cdnData = await cdnResponse.json();
-        }
+        STATE.cdn_img_json = cdnData.reduce((map, obj) => Object.assign(map, obj), {});
+        STATE.pngs_json_list = pngsData;
+        STATE.itemData = itemDatar;
 
-        // Build item index
-        if (itemData) {
-            STATE.itemData = itemData;
-            STATE.itemIndex = {};
-            for (const item of itemData) {
-                const id = String(item.itemID);
-                STATE.itemIndex[id] = item;
-            }
-            console.log(`📦 Loaded ${Object.keys(STATE.itemIndex).length} items from database`);
+        STATE.itemIndex = {};
+        for (const item of itemDatar) {
+            STATE.itemIndex[String(item.itemID)] = item;
         }
 
-        // Build CDN index
-        if (cdnData) {
-            STATE.cdnData = cdnData;
-            STATE.cdnIndex = {};
-            for (const entry of cdnData) {
-                for (const [id, url] of Object.entries(entry)) {
-                    STATE.cdnIndex[id] = url;
-                }
-            }
-            console.log(`📦 Loaded ${Object.keys(STATE.cdnIndex).length} CDN mappings`);
-        }
-    } catch (e) {
-        console.warn('⚠️ Error loading item database:', e);
+        console.log('📦 Loaded', Object.keys(STATE.itemIndex).length, 'items');
+        console.log('📦 Loaded', Object.keys(STATE.cdn_img_json).length, 'CDN mappings');
+        console.log('📦 Loaded', STATE.pngs_json_list.length, 'PNG files');
+
+    } catch (error) {
+        console.error('Error fetching data:', error);
     }
 }
 
 // ================================
-// Item Lookup Functions
+// Item Lookup
 // ================================
 
 function getItemInfo(itemId) {
     if (!itemId) return null;
-    const id = String(itemId);
-    return STATE.itemIndex[id] || null;
+    return STATE.itemIndex[String(itemId)] || null;
+}
+
+function getItemDisplayName(itemId) {
+    const info = getItemInfo(itemId);
+    if (!info) return null;
+    const name = info.name;
+    const desc2 = info.description2;
+    const desc = info.description;
+    
+    if (name && name !== 'NONE' && name !== 'null' && name.trim() !== '') {
+        return name;
+    }
+    if (desc2 && desc2 !== 'NONE' && desc2 !== 'null' && desc2.trim() !== '') {
+        return desc2;
+    }
+    if (desc && desc !== 'NONE' && desc !== 'null' && desc.trim() !== '') {
+        return desc;
+    }
+    return null;
 }
 
 function getItemDescription(itemId) {
     const info = getItemInfo(itemId);
     if (!info) return null;
-    // Use description2 first (more detailed), then description
-    return info.description2 || info.description || null;
+    const desc = info.description;
+    const desc2 = info.description2;
+    if (desc && desc !== 'NONE' && desc !== 'null' && desc.trim() !== '') {
+        return desc;
+    }
+    if (desc2 && desc2 !== 'NONE' && desc2 !== 'null' && desc2.trim() !== '') {
+        return desc2;
+    }
+    return null;
 }
 
 function getItemRarity(itemId) {
@@ -180,10 +187,57 @@ function getItemRarity(itemId) {
     return info ? info.Rare : null;
 }
 
-function getCdnUrl(itemId) {
+function getItemIcon(itemId) {
+    const info = getItemInfo(itemId);
+    return info ? info.icon : null;
+}
+
+function getItemType(itemId) {
+    const info = getItemInfo(itemId);
+    return info ? (info.itemType || info.collectionType) : null;
+}
+
+function getItemCollectionType(itemId) {
+    const info = getItemInfo(itemId);
+    return info ? info.collectionType : null;
+}
+
+// ================================
+// Get Item Image
+// ================================
+
+function getItemImageUrl(itemId) {
     if (!itemId) return null;
-    const id = String(itemId);
-    return STATE.cdnIndex[id] || null;
+    
+    const info = getItemInfo(itemId);
+    const icon = info ? info.icon : null;
+    const idStr = String(itemId);
+    
+    // 1. Try CDN first
+    const cdnUrl = STATE.cdn_img_json[idStr] ?? null;
+    if (cdnUrl) {
+        return cdnUrl;
+    }
+    
+    // 2. Try ff-resources using icon name
+    if (icon && STATE.pngs_json_list?.includes(icon + ".png")) {
+        return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${icon}.png`;
+    }
+    
+    // 3. Try ff-resources with ID
+    if (STATE.pngs_json_list?.includes(idStr + ".png")) {
+        return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${idStr}.png`;
+    }
+    
+    // 4. Try pet specific patterns
+    if (idStr.startsWith('130') || idStr.startsWith('131')) {
+        const petIcon = icon || idStr;
+        if (STATE.pngs_json_list?.includes(petIcon + ".png")) {
+            return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${petIcon}.png`;
+        }
+    }
+    
+    return null;
 }
 
 function getRarityColor(rare) {
@@ -201,28 +255,6 @@ function getRarityColor(rare) {
         'NONE': '#666666',
     };
     return colors[rare] || '#888888';
-}
-
-function getItemDisplay(itemId) {
-    const info = getItemInfo(itemId);
-    if (!info) {
-        return {
-            display: String(itemId),           // Just the ID
-            description: null,                  // No description
-            rare: null,
-            itemType: null,
-            icon: null,
-        };
-    }
-    // Get description (prefer description2)
-    const desc = info.description2 || info.description || null;
-    return {
-        display: desc ? `${itemId} (${desc})` : String(itemId),  // ID (description)
-        description: desc,
-        rare: info.Rare || null,
-        itemType: info.itemType || info.collectionType || null,
-        icon: info.icon || null,
-    };
 }
 
 // ================================
@@ -441,39 +473,48 @@ async function updateUsageCache(apiKey) {
 // Item Popup Functions
 // ================================
 
-function openItemPopup(itemId, itemLabel) {
+function openItemPopup(itemId) {
     const info = getItemInfo(itemId);
-    const cdnUrl = getCdnUrl(itemId);
-
-    // Build image URL
-    let imageUrl = cdnUrl || null;
-    if (!imageUrl && info && info.icon) {
-        imageUrl = `https://raw.githubusercontent.com/0xme/ff-resources/main/pngs/300x300/${info.icon}.png`;
-    }
-    if (!imageUrl) {
-        imageUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(itemId)}&background=FFBA00&color=000&size=200`;
-    }
-
-    const displayName = info?.description2 || info?.description || itemLabel || String(itemId);
-    const desc = info?.description || info?.description2 || 'No description available';
+    const name = getItemDisplayName(itemId) || String(itemId);
+    const imageUrl = getItemImageUrl(itemId);
+    
+    const desc = getItemDescription(itemId) || 'No description available';
     const rare = info?.Rare || 'Unknown';
     const rareColor = getRarityColor(rare);
-    const itemType = info?.itemType || info?.collectionType || 'Unknown';
+    const itemType = info?.itemType || 'Unknown';
+    const collectionType = info?.collectionType || null;
+    const icon = info?.icon || null;
+    const isUnique = info?.isUnique || null;
 
-    DOM.popupImage.src = imageUrl;
-    DOM.popupImage.alt = displayName;
-    DOM.popupTitle.textContent = displayName;
+    DOM.popupImage.src = imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(itemId)}&background=FFBA00&color=000&size=200`;
+    DOM.popupImage.alt = name;
+    DOM.popupImage.onerror = function() {
+        this.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(itemId)}&background=FFBA00&color=000&size=200`;
+    };
+    DOM.popupTitle.textContent = name;
     DOM.popupDesc.textContent = desc;
     DOM.popupId.innerHTML = `<strong>ID:</strong> ${itemId}`;
     DOM.popupRarity.innerHTML = `<strong>Rarity:</strong> <span style="color:${rareColor};">${rare}</span>`;
-    DOM.popupType.innerHTML = `<strong>Type:</strong> ${itemType}`;
+    
+    let typeStr = itemType;
+    if (collectionType && collectionType !== 'NONE' && collectionType !== 'null') {
+        typeStr += ` (${collectionType})`;
+    }
+    DOM.popupType.innerHTML = `<strong>Type:</strong> ${typeStr}`;
+
+    if (icon) {
+        DOM.popupType.innerHTML += `<br><strong>Icon:</strong> ${icon}`;
+    }
+    if (isUnique && isUnique !== 'NONE' && isUnique !== 'null') {
+        DOM.popupType.innerHTML += `<br><strong>Unique:</strong> ${isUnique}`;
+    }
 
     DOM.popupBadge.textContent = rare;
     DOM.popupBadge.style.color = rareColor;
     DOM.popupBadge.style.borderColor = rareColor;
 
     DOM.popup.dataset.itemId = itemId;
-    DOM.popup.dataset.itemLabel = displayName;
+    DOM.popup.dataset.itemLabel = name;
     DOM.popup.dataset.imageUrl = imageUrl;
 
     DOM.popup.classList.add('active');
@@ -495,10 +536,10 @@ function shareItemToTelegram() {
 
 function openGoogleLens() {
     const imageUrl = DOM.popup.dataset.imageUrl;
-    if (imageUrl) {
+    if (imageUrl && !imageUrl.includes('ui-avatars.com')) {
         window.open(`https://lens.google.com/uploadbyurl?url=${encodeURIComponent(imageUrl)}`, '_blank');
     } else {
-        alert('No image available for Google Lens');
+        alert('No valid image available for Google Lens');
     }
 }
 
@@ -506,37 +547,81 @@ function openGoogleLens() {
 // Render Functions
 // ================================
 
-function renderItemChip(id, label) {
-    const info = getItemDisplay(id);
-    const rare = info.rare || getItemRarity(id);
+function renderItemChip(itemId, label) {
+    const name = getItemDisplayName(itemId) || String(itemId);
+    const rare = getItemRarity(itemId);
     const rareColor = getRarityColor(rare);
-    const displayText = info.display || String(id);  // This now shows "ID (description)" or just "ID"
-    const cdnUrl = getCdnUrl(id);
+    const imageUrl = getItemImageUrl(itemId);
+    const hasImage = imageUrl !== null;
 
-    // Check if we have a description (for the popup)
-    const hasDescription = info.description !== null;
-
-    return `
+    let chipHtml = `
         <div class="item-chip" 
              style="${rare ? `border-color: ${rareColor};` : ''}"
-             onclick="openItemPopup('${id}', '${displayText.replace(/'/g, "\\'")}')">
-            ${label ? `<span style="font-weight:600;">${label}:</span> ` : ''}
-            ${displayText}
-            <span class="item-id">ID: ${id}</span>
-            ${cdnUrl ? '<span class="item-id">🖼️</span>' : ''}
-            ${rare ? `<span class="item-id" style="color:${rareColor};">${rare}</span>` : ''}
+             onclick="openItemPopup('${itemId}')">
+    `;
+
+    if (hasImage) {
+        chipHtml += `
+            <div class="item-chip-image">
+                <img src="${imageUrl}" alt="${name}" loading="lazy" 
+                     onerror="this.style.display='none'" />
+            </div>
+        `;
+    } else {
+        chipHtml += `
+            <div class="item-chip-image" style="background: var(--bg-secondary); display:flex; align-items:center; justify-content:center; font-size:32px;">
+                🎯
+            </div>
+        `;
+    }
+
+    chipHtml += `
+            <div class="item-chip-info">
+                ${label ? `<span class="item-chip-label">${label}</span>` : ''}
+                <span class="item-chip-name">${name}</span>
+                ${rare ? `<span class="item-chip-rarity" style="color:${rareColor};">${rare}</span>` : ''}
+            </div>
+        </div>
+    `;
+
+    return chipHtml;
+}
+
+function renderSkillChip(skillId) {
+    const name = getItemDisplayName(skillId) || String(skillId);
+    return `
+        <div class="skill-chip" onclick="openItemPopup('${skillId}')">
+            ${name}
         </div>
     `;
 }
 
-function renderSkillChip(skillId) {
-    const info = getItemDisplay(skillId);
-    const displayText = info.display || String(skillId);
-    return `
-        <div class="skill-chip" onclick="openItemPopup('${skillId}', '${displayText.replace(/'/g, "\\'")}')">
-            ${displayText}
+function renderTitleChip(titleId) {
+    const name = getItemDisplayName(titleId) || String(titleId);
+    const rare = getItemRarity(titleId);
+    const rareColor = getRarityColor(rare);
+    const imageUrl = getItemImageUrl(titleId);
+    const hasImage = imageUrl !== null;
+
+    let html = `
+        <div class="title-chip" 
+             style="${rare ? `border-color: ${rareColor};` : ''}"
+             onclick="openItemPopup('${titleId}')">
+    `;
+
+    if (hasImage) {
+        html += `<img src="${imageUrl}" alt="${name}" class="title-chip-image" onerror="this.style.display='none'" />`;
+    } else {
+        html += `<span class="title-chip-image" style="display:flex; align-items:center; justify-content:center; font-size:16px;">🎯</span>`;
+    }
+
+    html += `
+            <span class="title-chip-name">${name}</span>
+            ${rare ? `<span class="title-chip-rarity" style="color:${rareColor};">${rare}</span>` : ''}
         </div>
     `;
+
+    return html;
 }
 
 // ================================
@@ -582,8 +667,7 @@ function displayPlayer(data, uid) {
 
     const titleId = profile.Title;
     if (titleId) {
-        const titleInfo = getItemDisplay(titleId);
-        DOM.ovTitle.textContent = titleInfo.display || String(titleId);
+        DOM.ovTitle.innerHTML = renderTitleChip(titleId);
     } else {
         DOM.ovTitle.textContent = '—';
     }
@@ -624,31 +708,27 @@ function displayPlayer(data, uid) {
     // Outfit
     const outfit = equipped.EquippedOutfit || [];
     DOM.outfitItems.innerHTML = outfit.length > 0
-        ? outfit.map((id, i) => renderItemChip(id, `Item ${i + 1}`)).join('')
+        ? outfit.map((id) => renderItemChip(id, null)).join('')
         : '<p class="empty-state">No outfit</p>';
 
     // Weapons
     const weapons = equipped.EquippedWeapon || [];
     DOM.weaponItems.innerHTML = weapons.length > 0
-        ? weapons.map((id, i) => renderItemChip(id, `Weapon ${i + 1}`)).join('')
+        ? weapons.map((id) => renderItemChip(id, null)).join('')
         : '<p class="empty-state">No weapons</p>';
 
-    // Skills - show with descriptions
+    // Skills
     const skills = equipped.EquippedSkills || [];
     if (skills.length > 0) {
-        // Group into slots of 4
         const skillGroups = [];
         for (let i = 0; i < skills.length; i += 4) {
             skillGroups.push(skills.slice(i, i + 4));
         }
         DOM.skillItems.innerHTML = skillGroups.map((group, idx) => {
-            const skillDisplay = group.map(id => {
-                const info = getItemDisplay(id);
-                return info.display || id;
-            }).join(', ');
+            const skillNames = group.map(id => getItemDisplayName(id) || id).join(', ');
             return `
-                <div class="skill-chip" onclick="openItemPopup('${group[0]}', '${skillDisplay.replace(/'/g, "\\'")}')">
-                    Slot ${idx + 1}: ${skillDisplay}
+                <div class="skill-chip" onclick="openItemPopup('${group[0]}')">
+                    Slot ${idx + 1}: ${skillNames}
                 </div>
             `;
         }).join('');
@@ -656,26 +736,45 @@ function displayPlayer(data, uid) {
         DOM.skillItems.innerHTML = '<p class="empty-state">No skills</p>';
     }
 
-    // Pet
+    // ============================================
+    // PET - NOW USES item-chip WITH IMAGES
+    // ============================================
     if (pet && pet.id) {
-        const petInfo = getItemDisplay(pet.id);
-        const petSkinInfo = pet.skinId ? getItemDisplay(pet.skinId) : null;
-        const petSkillInfo = pet.selectedSkillId ? getItemDisplay(pet.selectedSkillId) : null;
-
+        const petName = getItemDisplayName(pet.id) || pet.id;
+        
+        // Use item-chip for pet (shows image)
         let petHtml = `
-            <div class="skill-chip" onclick="openItemPopup('${pet.id}', '${petInfo.display}')">
-                🐾 ${petInfo.display}
-            </div>
-            <div class="skill-chip">Level: ${pet.level || '—'}</div>
-            <div class="skill-chip">Exp: ${pet.exp || '—'}</div>
-            <div class="skill-chip">Selected: ${pet.isSelected ? 'Yes' : 'No'}</div>
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; width:100%;">
+                ${renderItemChip(pet.id, '🐾 Pet')}
         `;
-        if (petSkillInfo) {
-            petHtml += `<div class="skill-chip" onclick="openItemPopup('${pet.selectedSkillId}', '${petSkillInfo.display}')">Skill: ${petSkillInfo.display}</div>`;
+        
+        // Pet details as info chips
+        petHtml += `
+                <div class="pet-detail-chip">Level: ${pet.level || '—'}</div>
+                <div class="pet-detail-chip">Exp: ${pet.exp || '—'}</div>
+                <div class="pet-detail-chip">Selected: ${pet.isSelected ? '✅ Yes' : '❌ No'}</div>
+            </div>
+        `;
+        
+        // Pet Skill (clickable)
+        if (pet.selectedSkillId) {
+            const skillName = getItemDisplayName(pet.selectedSkillId) || pet.selectedSkillId;
+            petHtml += `
+                <div style="margin-top:8px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    ${renderItemChip(pet.selectedSkillId, '⚡ Skill')}
+            `;
+            if (pet.skinId) {
+                petHtml += renderItemChip(pet.skinId, '🎨 Skin');
+            }
+            petHtml += `</div>`;
+        } else if (pet.skinId) {
+            petHtml += `
+                <div style="margin-top:8px; display:grid; grid-template-columns: 1fr; gap:10px;">
+                    ${renderItemChip(pet.skinId, '🎨 Skin')}
+                </div>
+            `;
         }
-        if (petSkinInfo) {
-            petHtml += `<div class="skill-chip" onclick="openItemPopup('${pet.skinId}', '${petSkinInfo.display}')">Skin: ${petSkinInfo.display}</div>`;
-        }
+        
         DOM.petInfo.innerHTML = petHtml;
     } else {
         DOM.petInfo.innerHTML = '<p class="empty-state">No pet</p>';
@@ -841,7 +940,7 @@ function setupPopupListeners() {
 async function init() {
     cacheDom();
     STATE.rankData = window.RANK_DATA || null;
-    await loadItemDatabase();
+    await loadData();
     loadApiKeys();
     loadHistory();
     initTheme();
@@ -870,7 +969,7 @@ async function init() {
         setTimeout(performSearch, 300);
     }
 
-    console.log('🎯 Free Fire Player Info initialized!');
+    console.log('🎯 Free Fire Player Info initialized with pet images!');
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -555,7 +555,10 @@ body {
     color: var(--text-secondary);
 }
 
-/* Items */
+/* ================================
+   Item Chip with Image
+================================ */
+
 .items-section {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -579,41 +582,137 @@ body {
 .items-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 8px;
+    gap: 10px;
 }
+
+/* ================================
+   Item Chip
+================================ */
 
 .item-chip {
     background: var(--bg-card);
-    padding: 8px 12px;
     border-radius: var(--radius-sm);
-    border: 1px solid var(--border-color);
-    text-align: center;
-    font-size: 12px;
-    font-weight: 500;
+    border: 2px solid var(--border-color);
+    overflow: hidden;
     transition: all var(--transition);
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    text-align: center;
+    min-height: 140px;
 }
 
 .item-chip:hover {
     border-color: var(--accent);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 186, 0, 0.15);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 16px rgba(255, 186, 0, 0.15);
 }
 
-.item-chip .item-id {
-    display: block;
+.item-chip-image {
+    width: 100%;
+    aspect-ratio: 1/1;
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    background: var(--bg-secondary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.item-chip-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.item-chip-info {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.item-chip-label {
     font-size: 10px;
-    font-weight: 400;
+    font-weight: 600;
     color: var(--text-muted);
-    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
-.item-chip .item-desc {
-    display: block;
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--text-secondary);
+.item-chip-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.2;
+    word-break: break-word;
 }
+
+.item-chip-id {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.item-chip-rarity {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.item-chip-type {
+    font-size: 9px;
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+/* ================================
+   Title Chip
+================================ */
+
+.title-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px 4px 4px;
+    border-radius: var(--radius-sm);
+    border: 2px solid var(--border-color);
+    cursor: pointer;
+    transition: all var(--transition);
+    background: var(--bg-input);
+}
+
+.title-chip:hover {
+    border-color: var(--accent);
+    transform: scale(1.02);
+}
+
+.title-chip-image {
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.title-chip-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.title-chip-rarity {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+/* ================================
+   Skill Chip
+================================ */
 
 .skill-chip {
     background: var(--bg-card);
@@ -630,12 +729,6 @@ body {
 .skill-chip:hover {
     border-color: var(--accent);
     transform: translateY(-1px);
-}
-
-@media (max-width: 768px) {
-    .items-section {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Guild */
@@ -1023,27 +1116,9 @@ body {
     color: #fff;
 }
 
-@media (max-width: 480px) {
-    .item-popup {
-        width: 95%;
-        border-radius: var(--radius-sm);
-    }
-    .item-popup-info {
-        padding: 16px;
-    }
-    .item-popup-image {
-        padding: 12px;
-        min-height: 140px;
-    }
-    .item-popup-image img {
-        max-height: 200px;
-    }
-    .item-popup-actions {
-        flex-direction: column;
-    }
-}
-
-/* Responsive */
+/* ================================
+   Responsive
+================================ */
 @media (max-width: 768px) {
     .hero-title {
         font-size: 32px;
@@ -1102,6 +1177,10 @@ body {
     .items-grid {
         grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
     }
+
+    .items-section {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 480px) {
@@ -1121,7 +1200,33 @@ body {
         font-size: 20px;
     }
 
-    .items-section {
-        grid-template-columns: 1fr;
+    .items-grid {
+        grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+    }
+
+    .item-popup {
+        width: 95%;
+        border-radius: var(--radius-sm);
+    }
+    .item-popup-info {
+        padding: 16px;
+    }
+    .item-popup-image {
+        padding: 12px;
+        min-height: 140px;
+    }
+    .item-popup-image img {
+        max-height: 200px;
+    }
+    .item-popup-actions {
+        flex-direction: column;
+    }
+
+    .item-chip-name {
+        font-size: 11px;
+    }
+    .item-chip {
+        min-height: 120px;
+        padding: 6px;
     }
 }

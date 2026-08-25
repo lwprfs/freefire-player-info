@@ -4,6 +4,9 @@ A powerful Python-based CLI tool to fetch and display detailed Free Fire player 
 
 ## Features
 
+- https://lwprfs.github.io/freefire-player-info/info-website/ for uid info
+- https://lwprfs.github.io/freefire-player-info/website/ for itemid info
+- https://api.gameskinbo.com for api key (free)
 - 🔍 **Fetch Player Information** - Get detailed player stats including ranks, account info, equipped items, and more
 - 🎨 **Colorful Output** - Beautiful terminal output with color-coded sections and rarity indicators
 - 📦 **Asset Integration** - Automatically matches item IDs with descriptions, rarity colors, and CDN links from the assets folder
@@ -248,6 +251,8 @@ CS Rank (Star-based)
 
 From 0xMe/ItemD2 but with ob54 update
 - https://lwprfs.github.io/freefire-player-info/website/
+
+- https://lwprfs.github.io/freefire-player-info/info-website/
 
 ## Credits
 

@@ -1,5 +1,5 @@
 /**
- * Free Fire Player Info - Fixed with Pet Images on Main Page
+ * Free Fire Player Info - Pet Images + Original Image Priority
  */
 
 // ================================
@@ -203,7 +203,7 @@ function getItemCollectionType(itemId) {
 }
 
 // ================================
-// Get Item Image
+// Get Item Image - ORIGINAL PRIORITY RESTORED
 // ================================
 
 function getItemImageUrl(itemId) {
@@ -213,23 +213,23 @@ function getItemImageUrl(itemId) {
     const icon = info ? info.icon : null;
     const idStr = String(itemId);
     
-    // 1. Try CDN first
+    // 1. TRY FF-RESOURCES FIRST (using icon name) - Original behavior
+    if (icon && STATE.pngs_json_list?.includes(icon + ".png")) {
+        return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${icon}.png`;
+    }
+    
+    // 2. TRY CDN SECOND - Fallback
     const cdnUrl = STATE.cdn_img_json[idStr] ?? null;
     if (cdnUrl) {
         return cdnUrl;
     }
     
-    // 2. Try ff-resources using icon name
-    if (icon && STATE.pngs_json_list?.includes(icon + ".png")) {
-        return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${icon}.png`;
-    }
-    
-    // 3. Try ff-resources with ID
+    // 3. TRY FF-RESOURCES WITH ID - Last resort
     if (STATE.pngs_json_list?.includes(idStr + ".png")) {
         return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${idStr}.png`;
     }
     
-    // 4. Try pet specific patterns
+    // 4. Pet specific fallback (only if none of the above work)
     if (idStr.startsWith('130') || idStr.startsWith('131')) {
         const petIcon = icon || idStr;
         if (STATE.pngs_json_list?.includes(petIcon + ".png")) {
@@ -737,28 +737,30 @@ function displayPlayer(data, uid) {
     }
 
     // ============================================
-    // PET - NOW USES item-chip WITH IMAGES
+    // PET - Uses item-chip with images
     // ============================================
     if (pet && pet.id) {
         const petName = getItemDisplayName(pet.id) || pet.id;
         
-        // Use item-chip for pet (shows image)
         let petHtml = `
             <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; width:100%;">
                 ${renderItemChip(pet.id, '🐾 Pet')}
         `;
         
-        // Pet details as info chips
         petHtml += `
-                <div class="pet-detail-chip">Level: ${pet.level || '—'}</div>
-                <div class="pet-detail-chip">Exp: ${pet.exp || '—'}</div>
-                <div class="pet-detail-chip">Selected: ${pet.isSelected ? '✅ Yes' : '❌ No'}</div>
+                <div class="pet-detail-chip" style="background:var(--bg-card); padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
+                    Level: ${pet.level || '—'}
+                </div>
+                <div class="pet-detail-chip" style="background:var(--bg-card); padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
+                    Exp: ${pet.exp || '—'}
+                </div>
+                <div class="pet-detail-chip" style="background:var(--bg-card); padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
+                    ${pet.isSelected ? '✅ Selected' : '❌ Not Selected'}
+                </div>
             </div>
         `;
         
-        // Pet Skill (clickable)
         if (pet.selectedSkillId) {
-            const skillName = getItemDisplayName(pet.selectedSkillId) || pet.selectedSkillId;
             petHtml += `
                 <div style="margin-top:8px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                     ${renderItemChip(pet.selectedSkillId, '⚡ Skill')}

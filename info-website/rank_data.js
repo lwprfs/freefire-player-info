@@ -1,0 +1,55 @@
+/**
+ * Rank data for BR and CS modes
+ */
+
+const RANK_DATA = {
+    br: {
+        'Bronze I': { min_rp: 700, max_rp: 800 },
+        'Bronze II': { min_rp: 801, max_rp: 900 },
+        'Bronze III': { min_rp: 901, max_rp: 1000 },
+        'Silver I': { min_rp: 1001, max_rp: 1100 },
+        'Silver II': { min_rp: 1101, max_rp: 1200 },
+        'Silver III': { min_rp: 1201, max_rp: 1300 },
+        'Gold I': { min_rp: 1301, max_rp: 1400 },
+        'Gold II': { min_rp: 1401, max_rp: 1500 },
+        'Gold III': { min_rp: 1501, max_rp: 1600 },
+        'Gold IV': { min_rp: 1601, max_rp: 1800 },
+        'Platinum I': { min_rp: 1801, max_rp: 1900 },
+        'Platinum II': { min_rp: 1901, max_rp: 2000 },
+        'Platinum III': { min_rp: 2001, max_rp: 2100 },
+        'Platinum IV': { min_rp: 2101, max_rp: 2300 },
+        'Diamond I': { min_rp: 2301, max_rp: 2400 },
+        'Diamond II': { min_rp: 2401, max_rp: 2500 },
+        'Diamond III': { min_rp: 2501, max_rp: 2600 },
+        'Diamond IV': { min_rp: 2601, max_rp: 3200 },
+        'Heroic': { min_rp: 3201, max_rp: 6000 },
+        'Master': { min_rp: 6001, max_rp: 999999 },
+    },
+    cs: {
+        'Bronze I': { min_stars: 0, max_stars: 2 },
+        'Bronze II': { min_stars: 3, max_stars: 5 },
+        'Bronze III': { min_stars: 6, max_stars: 8 },
+        'Silver I': { min_stars: 9, max_stars: 12 },
+        'Silver II': { min_stars: 13, max_stars: 16 },
+        'Silver III': { min_stars: 17, max_stars: 20 },
+        'Gold I': { min_stars: 21, max_stars: 25 },
+        'Gold II': { min_stars: 26, max_stars: 30 },
+        'Gold III': { min_stars: 31, max_stars: 35 },
+        'Gold IV': { min_stars: 36, max_stars: 40 },
+        'Platinum I': { min_stars: 41, max_stars: 45 },
+        'Platinum II': { min_stars: 46, max_stars: 50 },
+        'Platinum III': { min_stars: 51, max_stars: 55 },
+        'Platinum IV': { min_stars: 56, max_stars: 60 },
+        'Diamond I': { min_stars: 61, max_stars: 65 },
+        'Diamond II': { min_stars: 66, max_stars: 70 },
+        'Diamond III': { min_stars: 71, max_stars: 75 },
+        'Diamond IV': { min_stars: 76, max_stars: 80 },
+        'Diamond V': { min_stars: 81, max_stars: 85 },
+        'Heroic': { min_stars: 86, max_stars: 110 },
+        'Elite Heroic': { min_stars: 111, max_stars: 135 },
+        'Master': { min_stars: 136, max_stars: 999999 },
+        'Grandmaster': { min_stars: -1, max_stars: -1 },
+    },
+};
+
+window.RANK_DATA = RANK_DATA;

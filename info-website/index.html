@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Free Fire Player Info</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="container header-content">
+                <div class="logo">
+                    <span class="logo-icon">🎯</span>
+                    <span class="logo-text">FF<span class="logo-highlight">Info</span></span>
+                </div>
+                <div class="header-actions">
+                    <button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">🌙</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Hero / Search -->
+        <section class="hero">
+            <div class="container">
+                <h1 class="hero-title">Free Fire Player <span class="gradient-text">Info</span></h1>
+                <p class="hero-subtitle">Search player details, ranks, items, and more — instantly.</p>
+
+                <div class="search-box">
+                    <div class="search-input-wrapper">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="searchInput" class="search-input" placeholder="Enter Player UID..." autocomplete="off" />
+                        <button class="search-btn" id="searchBtn">Search</button>
+                    </div>
+                    <div class="search-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="historyToggle" checked />
+                            Show history
+                        </label>
+                        <div class="region-selector">
+                            <span class="region-label">🌍 Region:</span>
+                            <select id="regionSelect" class="region-select">
+                                <option value="BD">🇧🇩 Bangladesh</option>
+                                <option value="IND">🇮🇳 India</option>
+                                <option value="BR">🇧🇷 Brazil</option>
+                                <option value="US">🇺🇸 USA</option>
+                                <option value="ID">🇮🇩 Indonesia</option>
+                                <option value="SG">🇸🇬 Singapore</option>
+                                <option value="PK">🇵🇰 Pakistan</option>
+                                <option value="MY">🇲🇾 Malaysia</option>
+                                <option value="TH">🇹🇭 Thailand</option>
+                                <option value="VN">🇻🇳 Vietnam</option>
+                                <option value="PH">🇵🇭 Philippines</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <!-- Loading -->
+                <div id="loading" class="loading-state" style="display:none;">
+                    <div class="spinner"></div>
+                    <p>Fetching player data...</p>
+                </div>
+
+                <!-- Error -->
+                <div id="error" class="error-state" style="display:none;">
+                    <span class="error-icon">⚠️</span>
+                    <p id="errorMessage">Something went wrong.</p>
+                    <button class="btn-secondary" onclick="clearError()">Dismiss</button>
+                </div>
+
+                <!-- Player Card -->
+                <div id="playerCard" class="player-card" style="display:none;">
+                    <!-- Header -->
+                    <div class="player-header">
+                        <div class="player-avatar">
+                            <img id="playerAvatar" src="https://ui-avatars.com/api/?name=Player&background=FFBA00&color=000&size=80" alt="Avatar" />
+                        </div>
+                        <div class="player-meta">
+                            <h2 id="playerName" class="player-name">—</h2>
+                            <div class="player-badges">
+                                <span class="badge" id="playerLevel">Level —</span>
+                                <span class="badge" id="playerRegion">—</span>
+                                <span class="badge" id="playerLikes">❤️ —</span>
+                            </div>
+                            <p class="player-uid" id="playerUID">UID: —</p>
+                            <p class="player-created" id="playerCreated">Opened: —</p>
+                        </div>
+                        <div class="player-actions">
+                            <button class="btn-icon" id="refreshBtn" title="Refresh data">🔄</button>
+                            <button class="btn-icon" id="exportBtn" title="Export JSON">📥</button>
+                        </div>
+                    </div>
+
+                    <!-- Tabs -->
+                    <div class="tabs-wrapper">
+                        <div class="tabs" id="tabsContainer">
+                            <button class="tab active" data-tab="overview">📋 Overview</button>
+                            <button class="tab" data-tab="rank">🏆 Rank</button>
+                            <button class="tab" data-tab="items">🎒 Items</button>
+                            <button class="tab" data-tab="guild">🏰 Guild</button>
+                            <button class="tab" data-tab="api">📊 API</button>
+                        </div>
+
+                        <div class="tab-content">
+                            <!-- Overview -->
+                            <div id="tab-overview" class="tab-pane active">
+                                <div class="info-grid">
+                                    <div class="info-item">
+                                        <span class="info-label">UID</span>
+                                        <span class="info-value" id="ovUID">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Name</span>
+                                        <span class="info-value" id="ovName">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Level</span>
+                                        <span class="info-value" id="ovLevel">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Region</span>
+                                        <span class="info-value" id="ovRegion">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Likes</span>
+                                        <span class="info-value" id="ovLikes">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Season ID</span>
+                                        <span class="info-value" id="ovSeason">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Credit Score</span>
+                                        <span class="info-value" id="ovCredit">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Title</span>
+                                        <span class="info-value" id="ovTitle">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Bio</span>
+                                        <span class="info-value" id="ovBio">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Gender</span>
+                                        <span class="info-value" id="ovGender">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Language</span>
+                                        <span class="info-value" id="ovLanguage">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Mode Prefer</span>
+                                        <span class="info-value" id="ovMode">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Release Version</span>
+                                        <span class="info-value" id="ovRelease">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Account Type</span>
+                                        <span class="info-value" id="ovAccountType">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Created At</span>
+                                        <span class="info-value" id="ovCreated">—</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">Last Login</span>
+                                        <span class="info-value" id="ovLastLogin">—</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Rank -->
+                            <div id="tab-rank" class="tab-pane">
+                                <div class="rank-grid">
+                                    <div class="rank-card br-rank">
+                                        <span class="rank-label">🏆 BR Rank</span>
+                                        <span class="rank-value" id="brRank">—</span>
+                                        <span class="rank-sub" id="brPoints">— RP</span>
+                                    </div>
+                                    <div class="rank-card cs-rank">
+                                        <span class="rank-label">🎯 CS Rank</span>
+                                        <span class="rank-value" id="csRank">—</span>
+                                        <span class="rank-sub" id="csPoints">— ★</span>
+                                    </div>
+                                    <div class="rank-card">
+                                        <span class="rank-label">📈 BR Max</span>
+                                        <span class="rank-value" id="brMax">—</span>
+                                    </div>
+                                    <div class="rank-card">
+                                        <span class="rank-label">📈 CS Max</span>
+                                        <span class="rank-value" id="csMax">—</span>
+                                    </div>
+                                    <div class="rank-card">
+                                        <span class="rank-label">Show BR Rank</span>
+                                        <span class="rank-value" id="showBr">—</span>
+                                    </div>
+                                    <div class="rank-card">
+                                        <span class="rank-label">Show CS Rank</span>
+                                        <span class="rank-value" id="showCs">—</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Items -->
+                            <div id="tab-items" class="tab-pane">
+                                <div class="items-section">
+                                    <div class="items-subsection">
+                                        <h4>👤 Equipped Items</h4>
+                                        <div id="equippedItems" class="items-grid">
+                                            <p class="empty-state">No items</p>
+                                        </div>
+                                    </div>
+                                    <div class="items-subsection">
+                                        <h4>👕 Outfit</h4>
+                                        <div id="outfitItems" class="items-grid">
+                                            <p class="empty-state">No outfit</p>
+                                        </div>
+                                    </div>
+                                    <div class="items-subsection">
+                                        <h4>🔫 Weapons</h4>
+                                        <div id="weaponItems" class="items-grid">
+                                            <p class="empty-state">No weapons</p>
+                                        </div>
+                                    </div>
+                                    <div class="items-subsection">
+                                        <h4>⚡ Skills</h4>
+                                        <div id="skillItems" class="items-grid">
+                                            <p class="empty-state">No skills</p>
+                                        </div>
+                                    </div>
+                                    <div class="items-subsection">
+                                        <h4>🐾 Pet</h4>
+                                        <div id="petInfo" class="items-grid">
+                                            <p class="empty-state">No pet</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Guild -->
+                            <div id="tab-guild" class="tab-pane">
+                                <div id="guildContainer">
+                                    <p class="empty-state">No guild information</p>
+                                </div>
+                            </div>
+
+                            <!-- API -->
+                            <div id="tab-api" class="tab-pane">
+                                <div class="api-usage">
+                                    <div class="usage-stats">
+                                        <div class="stat">
+                                            <span class="stat-label">Total Requests</span>
+                                            <span class="stat-value" id="totalRequests">0</span>
+                                        </div>
+                                        <div class="stat">
+                                            <span class="stat-label">API Key</span>
+                                            <span class="stat-value" id="apiKeyDisplay">—</span>
+                                        </div>
+                                        <div class="stat">
+                                            <span class="stat-label">Plan</span>
+                                            <span class="stat-value" id="apiPlan">—</span>
+                                        </div>
+                                    </div>
+                                    <div class="usage-bar-wrapper">
+                                        <div class="usage-bar-bg">
+                                            <div class="usage-bar-fill" id="usageBar" style="width:0%;"></div>
+                                        </div>
+                                        <span class="usage-text" id="usageText">0 / 100 used</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History -->
+                <section id="historySection" class="history-section">
+                    <h3 class="history-title">📋 Recent Players</h3>
+                    <div id="historyList" class="history-list">
+                        <p class="empty-state">No players in history yet.</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- ===== ITEM POPUP DIALOG ===== -->
+        <div role="dialog" aria-modal="true" class="item-popup-overlay" id="itemPopup">
+            <div class="item-popup">
+                <div class="item-popup-content">
+                    <div class="item-popup-image">
+                        <img id="popupImage" src="" alt="Item Image" />
+                        <div id="popupRarityBadge" class="popup-rarity-badge"></div>
+                    </div>
+                    <div class="item-popup-info">
+                        <h3 id="popupTitle">—</h3>
+                        <p id="popupDescription">—</p>
+                        <p id="popupId"><strong>ID:</strong> —</p>
+                        <p id="popupRarity"><strong>Rarity:</strong> —</p>
+                        <p id="popupType"><strong>Type:</strong> —</p>
+                        <div class="item-popup-actions">
+                            <button id="popupCloseBtn" class="popup-btn">Close</button>
+                            <button id="popupTelegramBtn" class="popup-btn telegram-btn">📤 Share</button>
+                            <button id="popupLensBtn" class="popup-btn lens-btn">🔍 Google Lens</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="container">
+                <p class="footer-text">
+                    Made with ❤️ &bull; Data from <a href="https://api.gameskinbo.com" target="_blank">GameSkinBo API</a>
+                </p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- Load data files -->
+    <script src="rank_data.js"></script>
+    <script src="src/config.js"></script>
+    <script src="src/script.js"></script>
+</body>
+</html>

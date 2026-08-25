@@ -569,7 +569,7 @@ function initializeInterfaceEdgeBtn() {
 
 // Define an object containing key-value pairs for link identifiers and their corresponding URLs
 const links = {
-  gt: "https://github.com/0xme/ItemID2",
+  gt: "https://github.com/lwprfs/freefire-player-info",
 };
 // Iterate over the entries of the 'links' object
 Object.entries(links).forEach(([t, e]) => {

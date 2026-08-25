@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://0xme.github.io/ItemID2/sitemap.xml
+Sitemap: https://lwprfs.github.io/freefire-player-info/website/sitemap.xml

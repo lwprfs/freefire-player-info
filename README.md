@@ -39,7 +39,8 @@ python main.py
 ```
 Configuration
 
-API Key
+# API Key
+
 
 1. Get your free API key from GamesKinbo Dashboard
 2. The tool will prompt you to enter the API key on first run
@@ -53,9 +54,9 @@ File Purpose
 config.json Stores API key and request count
 data/players_db.json Database of all checked players
 data/rank_data.json BR and CS rank definitions
-assets/ Item data and CDN links
+assets/ cdn item data and CDN links
 
-Usage
+# Usage
 
 Run the script:
 
@@ -186,16 +187,16 @@ Last Login: July 24, 2026 at 10:52 PM
 Total API Requests: 47
 ```
 
-Data Sources
+# Data Sources
 
 · API: GamesKinbo API Documentation
   · Free tier: 100 requests/month
   · Region support: BD, IND, BR, US, ID, SG, PK
-· Item Data: ItemID2 Repository
+· Item Data: 0xMe/ItemID2 & ilanzeta/ff-items-database-ptbr Repository
   · Contains item descriptions, rarity colors, and CDN links
   · Place in assets/ folder
 
-File Structure
+# File Structure
 
 ```
 freefire-player-info/
@@ -220,7 +221,7 @@ freefire-player-info/
 └── display_config.json      # Display section preferences
 ```
 
-Rank Systems
+# Rank Systems
 
 BR Rank (RP-based)
 
@@ -243,7 +244,12 @@ CS Rank (Star-based)
 · Master: 132-156 stars
 · Grandmaster: 157+ stars
 
-Credits
+# Website
+
+From 0xMe/ItemD2 but with ob54 update
+- https://lwprfs.github.io/freefire-player-info/website/
+
+## Credits
 
 · API: GamesKinbo - https://api.gameskinbo.com
 
@@ -251,7 +257,7 @@ Credits
 
 · Item Data: ilanzeta - https://github.com/ilanzera/ff-items-database-ptbr.git
 
-License
+#License
 
 This project is for educational purposes. Please respect the API terms of service and rate limits.
 

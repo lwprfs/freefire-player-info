@@ -249,6 +249,8 @@ Credits
 
 · Item Data: ItemID2 - https://github.com/0xMe/ItemID2
 
+· Item Data: ilanzeta - https://github.com/ilanzera/ff-items-database-ptbr.git
+
 License
 
 This project is for educational purposes. Please respect the API terms of service and rate limits.

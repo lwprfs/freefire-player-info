@@ -7,5 +7,5 @@ compare/__pycache__/*
 core/__pycache__/*
 display/__pycache__/*
 website/assests/*
-website/*.bak
-website/src/*.bak
+*.bak
+*.pyc

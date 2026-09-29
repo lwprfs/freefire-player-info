@@ -1,6 +1,12 @@
 /**
  * Free Fire Player Info - Pet Images + Original Image Priority
+ * LOCAL DEV VERSION — uses Flask proxy at http://localhost:5000
  */
+
+// ================================
+// Proxy base (Flask proxy_server.py)
+// ================================
+const PROXY_BASE = 'http://localhost:5000';
 
 // ================================
 // State
@@ -111,33 +117,49 @@ function cacheDom() {
 }
 
 // ================================
-// Load Data
+// Load Data (local assets only — no external dead URLs)
 // ================================
 
 async function loadData() {
-    try {
-        const [cdnData, pngsData, itemDatar] = await Promise.all([
-            fetch('assets/cdn.json').then((res) => res.json()),
-            fetch('https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/list.json').then((res) => res.json()),
-            fetch('assets/itemData.json').then((res) => res.json()),
-        ]);
+    // Load local assets individually so one failure doesn't kill the rest
+    const safeFetch = async (url) => {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+            return await res.json();
+        } catch (e) {
+            console.warn('⚠️ Failed to load', url, '-', e.message);
+            return null;
+        }
+    };
 
+    const [cdnData, itemDatar] = await Promise.all([
+        safeFetch('assets/cdn.json'),
+        safeFetch('assets/itemData.json'),
+    ]);
+
+    if (Array.isArray(cdnData)) {
         STATE.cdn_img_json = cdnData.reduce((map, obj) => Object.assign(map, obj), {});
-        STATE.pngs_json_list = pngsData;
-        STATE.itemData = itemDatar;
+    } else {
+        STATE.cdn_img_json = {};
+    }
 
-        STATE.itemIndex = {};
-        for (const item of itemDatar) {
+    // pngs list: try local fallback; if absent, leave empty
+    const pngsData = await safeFetch('assets/pngs_list.json');
+    STATE.pngs_json_list = Array.isArray(pngsData) ? pngsData : [];
+
+    STATE.itemData = Array.isArray(itemDatar) ? itemDatar : [];
+
+    STATE.itemIndex = {};
+    for (const item of STATE.itemData) {
+        if (item && item.itemID !== undefined) {
             STATE.itemIndex[String(item.itemID)] = item;
         }
-
-        console.log('📦 Loaded', Object.keys(STATE.itemIndex).length, 'items');
-        console.log('📦 Loaded', Object.keys(STATE.cdn_img_json).length, 'CDN mappings');
-        console.log('📦 Loaded', STATE.pngs_json_list.length, 'PNG files');
-
-    } catch (error) {
-        console.error('Error fetching data:', error);
     }
+
+    console.log('📦 Loaded', Object.keys(STATE.itemIndex).length, 'items');
+    console.log('📦 Loaded', Object.keys(STATE.cdn_img_json).length, 'CDN mappings');
+    console.log('📦 Loaded', STATE.pngs_json_list.length, 'PNG files');
 }
 
 // ================================
@@ -155,16 +177,10 @@ function getItemDisplayName(itemId) {
     const name = info.name;
     const desc2 = info.description2;
     const desc = info.description;
-    
-    if (name && name !== 'NONE' && name !== 'null' && name.trim() !== '') {
-        return name;
-    }
-    if (desc2 && desc2 !== 'NONE' && desc2 !== 'null' && desc2.trim() !== '') {
-        return desc2;
-    }
-    if (desc && desc !== 'NONE' && desc !== 'null' && desc.trim() !== '') {
-        return desc;
-    }
+
+    if (name && name !== 'NONE' && name !== 'null' && name.trim() !== '') return name;
+    if (desc2 && desc2 !== 'NONE' && desc2 !== 'null' && desc2.trim() !== '') return desc2;
+    if (desc && desc !== 'NONE' && desc !== 'null' && desc.trim() !== '') return desc;
     return null;
 }
 
@@ -173,12 +189,8 @@ function getItemDescription(itemId) {
     if (!info) return null;
     const desc = info.description;
     const desc2 = info.description2;
-    if (desc && desc !== 'NONE' && desc !== 'null' && desc.trim() !== '') {
-        return desc;
-    }
-    if (desc2 && desc2 !== 'NONE' && desc2 !== 'null' && desc2.trim() !== '') {
-        return desc2;
-    }
+    if (desc && desc !== 'NONE' && desc !== 'null' && desc.trim() !== '') return desc;
+    if (desc2 && desc2 !== 'NONE' && desc2 !== 'null' && desc2.trim() !== '') return desc2;
     return null;
 }
 
@@ -203,40 +215,38 @@ function getItemCollectionType(itemId) {
 }
 
 // ================================
-// Get Item Image - ORIGINAL PRIORITY RESTORED
+// Get Item Image
 // ================================
 
 function getItemImageUrl(itemId) {
     if (!itemId) return null;
-    
+
     const info = getItemInfo(itemId);
     const icon = info ? info.icon : null;
     const idStr = String(itemId);
-    
-    // 1. TRY FF-RESOURCES FIRST (using icon name) - Original behavior
-    if (icon && STATE.pngs_json_list?.includes(icon + ".png")) {
-        return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${icon}.png`;
+
+    // 1. FF-resources by icon name
+    if (icon && STATE.pngs_json_list?.includes(icon + '.png')) {
+        return `https://raw.githubusercontent.com/0xme/ff-resources/main/pngs/300x300/${icon}.png`;
     }
-    
-    // 2. TRY CDN SECOND - Fallback
+
+    // 2. CDN mapping
     const cdnUrl = STATE.cdn_img_json[idStr] ?? null;
-    if (cdnUrl) {
-        return cdnUrl;
+    if (cdnUrl) return cdnUrl;
+
+    // 3. FF-resources by ID
+    if (STATE.pngs_json_list?.includes(idStr + '.png')) {
+        return `https://raw.githubusercontent.com/0xme/ff-resources/main/pngs/300x300/${idStr}.png`;
     }
-    
-    // 3. TRY FF-RESOURCES WITH ID - Last resort
-    if (STATE.pngs_json_list?.includes(idStr + ".png")) {
-        return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${idStr}.png`;
-    }
-    
-    // 4. Pet specific fallback (only if none of the above work)
+
+    // 4. Pet fallback
     if (idStr.startsWith('130') || idStr.startsWith('131')) {
         const petIcon = icon || idStr;
-        if (STATE.pngs_json_list?.includes(petIcon + ".png")) {
-            return `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${petIcon}.png`;
+        if (STATE.pngs_json_list?.includes(petIcon + '.png')) {
+            return `https://raw.githubusercontent.com/0xme/ff-resources/main/pngs/300x300/${petIcon}.png`;
         }
     }
-    
+
     return null;
 }
 
@@ -346,6 +356,7 @@ function addToHistory(uid, name, data) {
 }
 
 function renderHistory() {
+    if (!DOM.historyToggle) return;
     const show = DOM.historyToggle.checked;
     const section = document.getElementById('historySection');
     if (!section) return;
@@ -436,14 +447,14 @@ function getRankDisplay(points, rankData, type) {
 }
 
 // ================================
-// API Calls
+// API Calls (through local Flask proxy)
 // ================================
 
 async function fetchPlayerInfo(uid, region) {
     const apiKey = getActiveApiKey();
     if (!apiKey) throw new Error('No API key available.');
 
-    const url = `https://api.gameskinbo.com/ff-info/get?uid=${uid}&region=${region}`;
+    const url = `${PROXY_BASE}/proxy/ff-info/get?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(region)}`;
     const response = await fetch(url, { headers: { 'x-api-key': apiKey } });
 
     if (!response.ok) {
@@ -453,13 +464,14 @@ async function fetchPlayerInfo(uid, region) {
     }
 
     const data = await response.json();
-    await updateUsageCache(apiKey);
+    // fire-and-forget usage update
+    updateUsageCache(apiKey);
     return data;
 }
 
 async function updateUsageCache(apiKey) {
     try {
-        const url = 'https://api.gameskinbo.com/api/usage';
+        const url = `${PROXY_BASE}/proxy/api/usage`;
         const response = await fetch(url, { headers: { 'x-api-key': apiKey } });
         if (response.ok) {
             const data = await response.json();
@@ -474,10 +486,11 @@ async function updateUsageCache(apiKey) {
 // ================================
 
 function openItemPopup(itemId) {
+    if (!DOM.popup) return;
     const info = getItemInfo(itemId);
     const name = getItemDisplayName(itemId) || String(itemId);
     const imageUrl = getItemImageUrl(itemId);
-    
+
     const desc = getItemDescription(itemId) || 'No description available';
     const rare = info?.Rare || 'Unknown';
     const rareColor = getRarityColor(rare);
@@ -495,7 +508,7 @@ function openItemPopup(itemId) {
     DOM.popupDesc.textContent = desc;
     DOM.popupId.innerHTML = `<strong>ID:</strong> ${itemId}`;
     DOM.popupRarity.innerHTML = `<strong>Rarity:</strong> <span style="color:${rareColor};">${rare}</span>`;
-    
+
     let typeStr = itemType;
     if (collectionType && collectionType !== 'NONE' && collectionType !== 'null') {
         typeStr += ` (${collectionType})`;
@@ -522,6 +535,7 @@ function openItemPopup(itemId) {
 }
 
 function closeItemPopup() {
+    if (!DOM.popup) return;
     DOM.popup.classList.remove('active');
     document.body.style.overflow = '';
 }
@@ -555,7 +569,7 @@ function renderItemChip(itemId, label) {
     const hasImage = imageUrl !== null;
 
     let chipHtml = `
-        <div class="item-chip" 
+        <div class="item-chip"
              style="${rare ? `border-color: ${rareColor};` : ''}"
              onclick="openItemPopup('${itemId}')">
     `;
@@ -563,7 +577,7 @@ function renderItemChip(itemId, label) {
     if (hasImage) {
         chipHtml += `
             <div class="item-chip-image">
-                <img src="${imageUrl}" alt="${name}" loading="lazy" 
+                <img src="${imageUrl}" alt="${name}" loading="lazy"
                      onerror="this.style.display='none'" />
             </div>
         `;
@@ -604,7 +618,7 @@ function renderTitleChip(titleId) {
     const hasImage = imageUrl !== null;
 
     let html = `
-        <div class="title-chip" 
+        <div class="title-chip"
              style="${rare ? `border-color: ${rareColor};` : ''}"
              onclick="openItemPopup('${titleId}')">
     `;
@@ -736,17 +750,13 @@ function displayPlayer(data, uid) {
         DOM.skillItems.innerHTML = '<p class="empty-state">No skills</p>';
     }
 
-    // ============================================
-    // PET - Uses item-chip with images
-    // ============================================
+    // Pet
     if (pet && pet.id) {
-        const petName = getItemDisplayName(pet.id) || pet.id;
-        
         let petHtml = `
             <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap:10px; width:100%;">
                 ${renderItemChip(pet.id, '🐾 Pet')}
         `;
-        
+
         petHtml += `
                 <div class="pet-detail-chip" style="background:var(--bg-card); padding:8px 12px; border-radius:var(--radius-sm); border:1px solid var(--border-color); text-align:center;">
                     Level: ${pet.level || '—'}
@@ -759,7 +769,7 @@ function displayPlayer(data, uid) {
                 </div>
             </div>
         `;
-        
+
         if (pet.selectedSkillId) {
             petHtml += `
                 <div style="margin-top:8px; display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -776,7 +786,7 @@ function displayPlayer(data, uid) {
                 </div>
             `;
         }
-        
+
         DOM.petInfo.innerHTML = petHtml;
     } else {
         DOM.petInfo.innerHTML = '<p class="empty-state">No pet</p>';
@@ -819,7 +829,7 @@ function displayPlayer(data, uid) {
     }
 
     // API Usage
-    const apiKey = getActiveApiKey();
+    const apiKey = STATE.apiKeys[STATE.currentKeyIndex] || '';
     const usage = STATE.usageCache[apiKey] || {};
     const limit = usage.limit || 100;
     const used = usage.used || 0;
@@ -924,6 +934,7 @@ function setupTabs() {
 // ================================
 
 function setupPopupListeners() {
+    if (!DOM.popup) return;
     DOM.popupClose.addEventListener('click', closeItemPopup);
     DOM.popup.addEventListener('click', function(e) {
         if (e.target === this) closeItemPopup();
@@ -940,9 +951,13 @@ function setupPopupListeners() {
 // ================================
 
 async function init() {
+    console.log('🎯 init() starting...');
     cacheDom();
     STATE.rankData = window.RANK_DATA || null;
-    await loadData();
+
+    // Don't let a data-load failure stop the whole app
+    try { await loadData(); } catch (e) { console.error('loadData failed:', e); }
+
     loadApiKeys();
     loadHistory();
     initTheme();
@@ -971,7 +986,12 @@ async function init() {
         setTimeout(performSearch, 300);
     }
 
-    console.log('🎯 Free Fire Player Info initialized with pet images!');
+    console.log('🎯 Free Fire Player Info initialized!');
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// Handle the case where DOMContentLoaded already fired (script at bottom of <body>)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}

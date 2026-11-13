@@ -4,7 +4,7 @@ Debug-friendly proxy server for Free Fire Player Info.
 Run: python3 proxy_server.py
 """
 
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import requests
 import json
@@ -12,22 +12,18 @@ import os
 import traceback
 from datetime import datetime
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, static_folder=None)
 CORS(app)
 
 API_BASE = "https://api.gameskinbo.com"
-CONFIG_FILE = "config.json"
 
-# Headers we send to GameSkinBo, mimicking a browser/real client
-UPSTREAM_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                  "AppleWebKit/537.36 (KHTML, like Gecko) "
-                  "Chrome/122.0.0.0 Safari/537.36",
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Origin": "https://api.gameskinbo.com",
-    "Referer": "https://api.gameskinbo.com/",
-}
+# Same minimal request the working CLI (main.py) sends. Do NOT spoof
+# Origin/Referer: that can make the upstream reject the request.
+UPSTREAM_HEADERS = {"Accept": "application/json"}
+
+# config.json lives in the project root (shared with the CLI)
+CONFIG_FILE = os.path.join(BASE_DIR, "..", "config.json")
 
 
 def load_config():
@@ -42,10 +38,34 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 
+def get_key(request_key):
+    """Use the browser-supplied key, else the first key in the CLI's config.json."""
+    if request_key:
+        return request_key
+    cfg = load_config()
+    keys = cfg.get("api_keys") or []
+    if not keys:
+        return None
+    idx = cfg.get("current_api_index", 0)
+    return keys[idx if idx < len(keys) else 0]
+
+
 def mask_key(key):
     if not key:
         return "<none>"
     return f"{key[:6]}...{key[-4:]}" if len(key) > 12 else "<short>"
+
+
+@app.route('/')
+def index():
+    return send_from_directory(BASE_DIR, 'index.html')
+
+
+@app.route('/<path:filename>')
+def static_files(filename):
+    if filename.startswith('proxy/'):
+        return jsonify({"error": "Not found"}), 404
+    return send_from_directory(BASE_DIR, filename)
 
 
 @app.route('/proxy/test', methods=['GET'])
@@ -62,7 +82,7 @@ def test_proxy():
 def get_player():
     uid = request.args.get('uid')
     region = request.args.get('region', 'BD')
-    api_key = request.headers.get('x-api-key')
+    api_key = get_key(request.headers.get('x-api-key'))
 
     print("\n" + "=" * 60)
     print(f"[REQ] /proxy/ff-info/get uid={uid} region={region} key={mask_key(api_key)}")
@@ -70,7 +90,7 @@ def get_player():
     if not uid:
         return jsonify({"error": "UID is required"}), 400
     if not api_key:
-        return jsonify({"error": "API key required. Provide x-api-key header."}), 401
+        return jsonify({"error": "API key required. Add one in the website or in config.json."}), 401
 
     upstream_url = f"{API_BASE}/ff-info/get"
     params = {"uid": uid, "region": region}
@@ -117,12 +137,12 @@ def get_player():
 
 @app.route('/proxy/api/usage', methods=['GET'])
 def get_usage():
-    api_key = request.headers.get('x-api-key')
+    api_key = get_key(request.headers.get('x-api-key'))
     print("\n" + "=" * 60)
     print(f"[REQ] /proxy/api/usage key={mask_key(api_key)}")
 
     if not api_key:
-        return jsonify({"error": "API key required. Provide x-api-key header."}), 401
+        return jsonify({"error": "API key required. Add one in the website or in config.json."}), 401
 
     headers = dict(UPSTREAM_HEADERS)
     headers["x-api-key"] = api_key
@@ -151,6 +171,7 @@ if __name__ == '__main__':
     print(" 🚀 FREE FIRE PLAYER INFO PROXY (debug mode v2) ")
     print("=" * 60)
     print(" Running on: http://localhost:5000")
+    print(" Website:    http://localhost:5000")
     print(" Test:       http://localhost:5000/proxy/test")
     print("=" * 60 + "\n")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

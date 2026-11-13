@@ -1,12 +1,25 @@
 /**
  * Free Fire Player Info - Pet Images + Original Image Priority
- * LOCAL DEV VERSION — uses Flask proxy at http://localhost:5000
+ * LOCAL DEV VERSION — uses Flask proxy (port 5000)
  */
 
 // ================================
 // Proxy base (Flask proxy_server.py)
 // ================================
-const PROXY_BASE = 'http://localhost:5000';
+// Where requests go:
+//  - GitHub Pages (*.github.io): no proxy exists, call the API directly.
+//  - proxy served page (port 5000): same origin.
+//  - anything else: proxy on the current hostname, port 5000.
+const IS_STATIC_HOST = /\.github\.io$/.test(window.location.hostname);
+const PROXY_BASE = (() => {
+    const { protocol, hostname, port } = window.location;
+    if (IS_STATIC_HOST) return 'https://api.gameskinbo.com';
+    if (protocol === 'file:') return 'http://localhost:5000';
+    if (port === '5000') return '';
+    return `${protocol}//${hostname}:5000`;
+})();
+const EP_PLAYER = IS_STATIC_HOST ? '/ff-info/get' : '/proxy/ff-info/get';
+const EP_USAGE = IS_STATIC_HOST ? '/api/usage' : '/proxy/api/usage';
 
 // ================================
 // State
@@ -451,11 +464,25 @@ function getRankDisplay(points, rankData, type) {
 // ================================
 
 async function fetchPlayerInfo(uid, region) {
-    const apiKey = getActiveApiKey();
-    if (!apiKey) throw new Error('No API key available.');
+    // Key is optional: if none is stored, the proxy uses the keys in config.json
+    const apiKey = STATE.apiKeys.length ? getActiveApiKey() : null;
 
-    const url = `${PROXY_BASE}/proxy/ff-info/get?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(region)}`;
-    const response = await fetch(url, { headers: { 'x-api-key': apiKey } });
+    const url = `${PROXY_BASE}${EP_PLAYER}?uid=${encodeURIComponent(uid)}&region=${encodeURIComponent(region)}`;
+    const headers = apiKey ? { 'x-api-key': apiKey } : {};
+
+    let response;
+    try {
+        response = await fetch(url, { headers });
+    } catch (e) {
+        throw new Error(IS_STATIC_HOST
+            ? 'Request blocked. The API may not allow browser (CORS) requests from GitHub Pages; use the local proxy (python3 proxy_server.py) instead.'
+            : `Cannot reach the proxy server at ${PROXY_BASE || window.location.origin}. Start it with: python3 proxy_server.py (inside info-website).`);
+    }
+
+    if (response.status === 401 && !apiKey) {
+        const key = getActiveApiKey(); // prompts and stores a key
+        if (key) return fetchPlayerInfo(uid, region);
+    }
 
     if (!response.ok) {
         let errorMsg = `HTTP ${response.status}`;
@@ -464,14 +491,13 @@ async function fetchPlayerInfo(uid, region) {
     }
 
     const data = await response.json();
-    // fire-and-forget usage update
-    updateUsageCache(apiKey);
+    if (apiKey) updateUsageCache(apiKey); // fire-and-forget
     return data;
 }
 
 async function updateUsageCache(apiKey) {
     try {
-        const url = `${PROXY_BASE}/proxy/api/usage`;
+        const url = `${PROXY_BASE}${EP_USAGE}`;
         const response = await fetch(url, { headers: { 'x-api-key': apiKey } });
         if (response.ok) {
             const data = await response.json();

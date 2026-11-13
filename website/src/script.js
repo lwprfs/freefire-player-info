@@ -1,28 +1,57 @@
-// Fetch data from multiple JSON files concurrently using Promise.all
+// Load a JSON file, trying several paths (works whether the site is served from
+// /website, from the project root, or from GitHub Pages). Returns fallback on failure.
+async function loadJson(urls, fallback = null) {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      console.warn("Failed to load", url, "-", e.message);
+    }
+  }
+  return fallback;
+}
+
+const PNG_LIST_URL =
+  "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/list.json";
+
+// Each file loads independently: one failure (e.g. the remote PNG list being
+// unreachable) no longer prevents the whole site from working.
 Promise.all([
-  // Fetching 'cdn.json' and parsing it as JSON
-  fetch("../assets/cdn.json").then((res) => res.json()),
-
-  // Fetching 'pngs.json' and parsing it as JSON
-  fetch(
-    "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/list.json",
-  ).then((res) => res.json()),
-
-  // Fetching 'itemData.json' and parsing it as JSON
-  fetch("../assets/itemData.json").then((res) => res.json()),
+  loadJson(["assets/cdn.json", "../assets/cdn.json", "/assets/cdn.json"], []),
+  loadJson([PNG_LIST_URL], null),
+  loadJson(
+    ["assets/itemData.json", "../assets/itemData.json", "/assets/itemData.json"],
+    null,
+  ),
 ])
   .then(([cdnData, pngsData, itemDatar]) => {
-    // Assign the fetched data to global variables for further use
-    cdn_img_json = cdnData.reduce((map, obj) => Object.assign(map, obj), {});
-    pngs_json_list = pngsData; // Contains data from 'pngs.json'
-    itemData = itemDatar; // Contains data from 'itemData.json'
+    if (!Array.isArray(itemDatar)) {
+      const gallery = document.getElementById("webpGallery");
+      if (gallery) {
+        gallery.innerHTML =
+          '<p style="padding:1rem">Failed to load item data (assets/itemData.json). ' +
+          "Serve this folder over HTTP, e.g. <code>python3 -m http.server</code> " +
+          "inside <code>website/</code>, and check the browser console.</p>";
+      }
+      return;
+    }
+    cdn_img_json = (Array.isArray(cdnData) ? cdnData : []).reduce(
+      (map, obj) => Object.assign(map, obj),
+      {},
+    );
+    pngs_json_list = Array.isArray(pngsData) ? pngsData : [];
+    pngs_list_loaded = Array.isArray(pngsData);
+    itemData = itemDatar;
 
     handleDisplayBasedOnURL();
   })
   .catch((error) => {
-    // Log any errors encountered during the fetch or processing
-    console.error("Error fetching data:", error);
+    console.error("Error loading data:", error);
   });
+
+let pngs_list_loaded = false;
 
 async function displayPage(pageNumber, searchTerm, webps) {
   current_data = webps;
@@ -49,9 +78,12 @@ async function displayPage(pageNumber, searchTerm, webps) {
       imgSrc = `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${item.icon}.png`;
     } else {
       const keyToFind = item?.itemID ? String(item.itemID) : "Not Provided";
-      const value = cdn_img_json[item.itemID.toString()] ?? null;
+      const value = cdn_img_json?.[item.itemID.toString()] ?? null;
       if (value) {
         imgSrc = value;
+      } else if (!pngs_list_loaded && item.icon) {
+        // PNG list unreachable: try the icon file directly
+        imgSrc = `https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/${item.icon}.png`;
       } else {
         // try {
         //   const astcData = new Uint8Array(await fetch(
@@ -79,6 +111,12 @@ async function displayPage(pageNumber, searchTerm, webps) {
     //img.alt = item.description;
     img.src = imgSrc;
     img.setAttribute("crossorigin", "anonymous");
+    img.addEventListener("error", () => {
+      if (img.dataset.fallback) return;
+      img.dataset.fallback = "1";
+      img.src =
+        "https://raw.githubusercontent.com/0xme/ff-resources/refs/heads/main/pngs/300x300/UI_EPFP_unknown.png";
+    });
 
     figure.addEventListener("click", () => {
       displayItemInfo(item, imgSrc, img, (isTrashMode = false));

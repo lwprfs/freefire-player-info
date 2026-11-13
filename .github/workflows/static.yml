@@ -5,8 +5,10 @@ on:
     branches: ["main"]
     paths:
       - 'website/**'
+      - 'info-website/**'
       - 'assets/**'
-      - '.github/workflows/ **'
+      - 'index.html'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 permissions:
@@ -36,9 +38,6 @@ jobs:
       
       - name: Prepare deployment
         run: echo "✅ Deployment prepared"
-      
-      - name: Pages Minify
-        uses: DrA1ex/pages-minify@v1.0.3
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

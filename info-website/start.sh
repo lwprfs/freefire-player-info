@@ -18,9 +18,9 @@ if ! python3 -c "import flask, flask_cors, requests" 2>/dev/null; then
     exit 1
 fi
 
-# --- Free ports 5000 and 8090 if busy ---
-for PORT in 5000 8090; do
-    PIDS=$(lsof -ti tcp:$PORT 2>/dev/null)
+# --- Free port 5000 if busy ---
+for PORT in 5000; do
+    PIDS=$(command -v lsof >/dev/null 2>&1 && lsof -ti tcp:$PORT 2>/dev/null)
     if [ -n "$PIDS" ]; then
         echo "⚠️  Port $PORT busy — killing PID(s): $PIDS"
         kill -9 $PIDS 2>/dev/null
@@ -52,28 +52,23 @@ fi
 echo "   ✅ Proxy is up"
 echo ""
 
-# --- Start static HTTP server ---
-echo "2. Starting HTTP server for website on :8090..."
-python3 -m http.server 8090 &
-HTTP_PID=$!
-echo "   HTTP PID: $HTTP_PID"
-echo ""
+HTTP_PID=""
 
 echo "======================================"
-echo "📍 Website: http://localhost:8090"
+echo "📍 Website: http://localhost:5000"
 echo "📍 Proxy:   http://localhost:5000"
 echo "📍 Test:    http://localhost:5000/proxy/test"
 echo "======================================"
 echo ""
-echo "Press Ctrl+C to stop both servers"
+echo "Press Ctrl+C to stop"
 echo ""
 
 # --- Cleanup on Ctrl+C ---
 cleanup() {
     echo ""
     echo "🛑 Shutting down..."
-    kill $PROXY_PID $HTTP_PID 2>/dev/null
-    wait $PROXY_PID $HTTP_PID 2>/dev/null
+    kill $PROXY_PID 2>/dev/null
+    wait $PROXY_PID 2>/dev/null
     echo "✅ Stopped."
     exit 0
 }
